@@ -1,0 +1,2313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f9f9f5">
+  <title>TCL MCN 直播间排班</title>
+  <style>
+:root {
+  color-scheme: light;
+  --canvas: #f9f9f5;
+  --surface: #fff;
+  --ink: #192b36;
+  --muted: #546675;
+  --dim: #677883;
+  --line: #dce4e5;
+  --soft-line: #e8eeee;
+  --table-head: #edf2f3;
+  --floor-bg: #f0f6f4;
+  --teal: #146459;
+  --teal-tint: #e4f2ee;
+  --teal-line: #c6dfd7;
+  --focus: #087363;
+  --coral: #a23f33;
+  --coral-tint: #f9e8e2;
+  --host: #3a626c;
+  --host-tint: #e8f2f4;
+  --assistant: #5d557f;
+  --assistant-tint: #f0edf7;
+  --neutral: #edf0f1;
+  --gutter: clamp(22px, 4vw, 58px);
+  --max: 1400px;
+  font-family: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { min-width: 0; margin: 0; color: var(--ink); background: var(--canvas); font-size: 14px; line-height: 1.5; }
+button, input, select { color: inherit; font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+h1, h2, h3, p { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+::selection { color: var(--teal); background: var(--teal-tint); }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-link {
+  position: fixed;
+  z-index: 10;
+  top: 8px;
+  left: 8px;
+  padding: 8px 11px;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--teal);
+  font-weight: 720;
+  transform: translateY(calc(-100% - 12px));
+}
+.skip-link:focus { transform: none; }
+
+.shell { width: min(100%, var(--max)); margin-inline: auto; padding-inline: var(--gutter); }
+.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+.masthead-inner { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 58px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; min-width: 0; font-size: 13px; font-weight: 780; line-height: 1.3; }
+.brand-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 26px;
+  border-radius: 5px;
+  color: #fff;
+  background: #ad313c;
+  font: 800 10px/1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -.025em;
+}
+.demo-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid #e9d8cb;
+  border-radius: 5px;
+  color: #794d38;
+  background: #fbf3ed;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.demo-tag[data-source="official"], .demo-tag[data-source="real"] { border-color: var(--teal-line); color: var(--teal); background: var(--teal-tint); }
+.demo-tag::before, .status-chip::before {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+.main { min-width: 0; padding-top: 23px; padding-bottom: 28px; }
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  margin-bottom: 12px;
+}
+.page-copy { min-width: 0; }
+.page-copy h1 { font-size: clamp(26px, 3vw, 35px); font-weight: 790; line-height: 1.18; letter-spacing: -.045em; }
+.team-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 690;
+}
+.team-field span { flex: none; }
+.team-field select {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 5px 9px;
+  border: 1px solid var(--teal-line);
+  border-radius: 6px;
+  color: var(--teal);
+  background: var(--floor-bg);
+  font-size: 13px;
+  font-weight: 740;
+}
+.time-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 100%; }
+.time-mode { color: var(--muted); font-size: 11px; font-weight: 650; }
+.time-mode[data-live="true"] { color: var(--teal); }
+.time-context {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.date-field, .clock-field { display: block; min-width: 0; }
+.date-field select, .clock-field input, .context-reset button {
+  min-height: 34px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--surface);
+}
+.date-field select { max-width: 180px; font-size: 12px; font-weight: 650; }
+.clock-field input {
+  width: 104px;
+  color: var(--teal);
+  background: var(--teal-tint);
+  font: 750 15px/1.15 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.context-reset button { padding-inline: 7px; color: var(--teal); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.context-reset button:hover { border-color: var(--teal-line); background: var(--teal-tint); }
+
+.mode-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.mode-button {
+  min-height: 40px;
+  padding: 6px 2px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.mode-button:hover { color: var(--teal); }
+.mode-button.is-active, .mode-button[aria-pressed="true"] { border-bottom-color: var(--teal); color: var(--teal); font-weight: 780; }
+
+.panel { min-width: 0; }
+#teamPending { margin-top: 13px; }
+.panel-head { margin-block: 18px 11px; }
+.panel-heading h2 { font-size: 22px; font-weight: 775; letter-spacing: -.023em; line-height: 1.25; }
+.panel-heading p { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.floor-overview-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 11px;
+  margin-block: 18px 11px;
+}
+.floor-overview-head h2, .floor-detail-head h2 { font-size: 22px; font-weight: 775; letter-spacing: -.023em; line-height: 1.25; }
+.overview-result { color: var(--muted); font-size: 12px; }
+.floor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr));
+  gap: 11px;
+}
+.floor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name arrow" "count arrow";
+  align-items: center;
+  justify-items: start;
+  gap: 2px 12px;
+  min-width: 0;
+  min-height: 97px;
+  padding: 14px 17px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface);
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.floor-card:hover { border-color: #8dbdb0; background: #fdfefd; }
+.floor-card:focus-visible { border-color: var(--focus); }
+.floor-name {
+  grid-area: name;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 785;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+.floor-count { grid-area: count; color: var(--muted); font-size: 13px; font-weight: 635; }
+.floor-chevron {
+  display: grid;
+  grid-area: arrow;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border: 1px solid var(--teal-line);
+  border-radius: 6px;
+  color: var(--teal);
+  background: var(--teal-tint);
+  font: 720 23px/1 "Segoe UI", sans-serif;
+}
+.floor-chevron:empty::after { content: "›"; }
+.floor-detail-head { margin-block: 10px 11px; }
+.floor-detail-head h2 { width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 35px;
+  margin: 0 0 6px -5px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--teal);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 720;
+}
+.back-button::before { content: "←"; }
+.back-button:hover { background: var(--teal-tint); }
+.room-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-block: 10px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pager-button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--teal-line);
+  border-radius: 6px;
+  color: var(--teal);
+  background: var(--surface);
+  font-weight: 720;
+}
+.pager-button:hover:not(:disabled) { background: var(--teal-tint); }
+.pager-button:disabled { border-color: var(--line); color: var(--dim); background: var(--canvas); }
+.pager-label { text-align: center; }
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 11px;
+}
+.room-filter-bar { align-items: center; }
+.filter-field { display: grid; flex: 0 1 140px; gap: 3px; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 700; }
+.filter-field :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.filter-field input::placeholder { color: var(--muted); font-weight: 500; }
+.room-search { flex: 0 1 265px; }
+.person-search { flex: 0 1 320px; }
+.state-select { flex: 0 1 111px; }
+.result-text { align-self: flex-end; margin: 0 1px 8px auto; color: var(--muted); font-size: 12px; }
+.room-filter-bar .result-text { align-self: center; margin-bottom: 0; }
+.people-filter-bar .person-search, .assistant-filter-bar .person-search { flex: 1 1 215px; max-width: 320px; }
+.people-status-field { flex: 0 1 148px; }
+.attendance-note {
+  width: fit-content;
+  max-width: 100%;
+  margin: -2px 0 11px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.hours-team, .hours-note { max-width: 955px; }
+.hours-team + .hours-team {
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+.hours-team-title {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 780;
+  line-height: 1.3;
+}
+.hours-role-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+}
+.hours-role { min-width: 0; }
+.hours-role-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin-bottom: 5px;
+}
+.hours-role-title { margin: 0; color: var(--teal); font-size: 14px; font-weight: 760; }
+.hours-role-total { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hours-table {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  background: var(--surface);
+  table-layout: fixed;
+  text-align: left;
+}
+.hours-table thead th {
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--table-head);
+  font-size: 12px;
+}
+.hours-table thead th:first-child { border-top-left-radius: 7px; }
+.hours-table thead th:last-child { width: 39%; border-top-right-radius: 7px; }
+.hours-table tbody :is(th, td) {
+  height: 42px;
+  padding: 7px 13px;
+  border-bottom: 1px solid var(--soft-line);
+  overflow-wrap: anywhere;
+}
+.hours-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
+.hours-table tbody tr:last-child :is(th, td):first-child { border-bottom-left-radius: 7px; }
+.hours-table tbody tr:last-child td:last-child { border-bottom-right-radius: 7px; }
+.hours-table tbody tr:hover :is(th, td) { background: #fbfdfb; }
+.hours-table :is(th, td):last-child { text-align: right; }
+.hours-name, .hours-table tbody th { font-weight: 720; }
+.hours-value, .hours-table tbody td:last-child {
+  color: var(--teal);
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+.hours-note {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.hours-note:empty { display: none; }
+
+@media (min-width: 768px) {
+  .hours-role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.roster {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 9px;
+  background: var(--surface);
+  table-layout: fixed;
+  text-align: left;
+}
+.roster :is(col, thead th):nth-child(1) { width: 36%; }
+.roster :is(col, thead th):nth-child(2) { width: 23%; }
+.roster :is(col, thead th):nth-child(3) { width: 41%; }
+.roster thead th {
+  padding: 9px 14px;
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  border-bottom: 1px solid var(--line);
+  color: #48616f;
+  background: var(--table-head);
+  font-size: 11px;
+  font-weight: 750;
+}
+.roster thead th:first-child { border-top-left-radius: 8px; }
+.roster thead th:last-child { border-top-right-radius: 8px; }
+.roster tbody :is(td, th[scope="row"]) { height: 63px; padding: 8px 14px; border-bottom: 1px solid var(--soft-line); vertical-align: middle; }
+.roster tbody:last-child tr:last-child :is(td, th) { border-bottom: 0; }
+.roster tbody:last-child tr:last-child :is(td, th):first-child { border-bottom-left-radius: 8px; }
+.roster tbody:last-child tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+.roster tbody tr:hover :is(td, th[scope="row"]) { background: #fcfdfc; }
+.room-label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.35;
+  text-align: left;
+}
+button.room-label:hover .room-title { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+.room-title { min-width: 0; overflow-wrap: anywhere; }
+.room-meta { min-width: 0; color: var(--muted); font-size: 11px; font-weight: 550; overflow-wrap: anywhere; }
+.rid {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  flex: none;
+  padding: 2px 5px;
+  border: 1px solid #dbe4e8;
+  border-radius: 4px;
+  color: #345464;
+  background: #f2f6f8;
+  font: 750 12px/1.2 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.room-time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.room-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; margin-top: 4px; }
+.room-status .room-time { margin-top: 0; }
+.period-remaining { color: var(--dim); }
+.account-line, .next-account, .shift-account {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.room-time .account-line { flex: 0 1 auto; }
+.status-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--neutral);
+  font-size: 10px;
+  font-weight: 690;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.status-chip[data-state="current"] { color: var(--teal); background: var(--teal-tint); }
+.status-chip[data-state="upcoming"] { color: var(--coral); background: var(--coral-tint); }
+.status-chip[data-state="empty"]::before { border: 1px solid currentColor; background: transparent; }
+.current-role { font-size: 14px; font-weight: 740; }
+.current-role > :is(.role-value, .role, .role-person), span.current-role { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 3px 6px; }
+.role-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  border-radius: 5px;
+  color: var(--host);
+  background: var(--host-tint);
+  font-size: 10px;
+  font-weight: 780;
+  vertical-align: -1px;
+}
+[data-role="assistant"] .role-avatar { color: var(--assistant); background: var(--assistant-tint); }
+.role-name { overflow-wrap: anywhere; }
+.role-label, .compact-label { display: block; color: var(--muted); font-size: 11px; font-weight: 580; line-height: 1.3; }
+.roster .current-role .role-label { display: none; }
+.current-role[data-vacant="true"] .role-name, .role-name.is-vacant, .role-missing, .pending { color: var(--dim); font-weight: 650; }
+.dim, .no-shift { color: var(--dim); font-weight: 500; }
+.next { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; min-width: 0; }
+.next :is(time, .next-label) { color: var(--teal); font: 750 14px/1.2 "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.next-roles { color: #405a68; font-size: 12px; overflow-wrap: anywhere; }
+.next-roles .pending { color: var(--coral); }
+.roster .next-account { flex: 0 1 auto; }
+.mobile-rooms { display: none; }
+
+.people-grid, .assistants-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.person-card, .assistant-card, .handoff-room {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.person-card-head, .person-card-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.person-card-head { margin-bottom: 8px; }
+.person-card-head .status-chip { margin-left: auto; }
+.assistant-card { display: flex; justify-content: space-between; align-items: center; gap: 8px 13px; min-height: 51px; }
+.assistant-team + .assistant-team { margin-top: 16px; }
+.assistant-team-title { margin: 0 0 7px; color: var(--ink); font-size: 16px; font-weight: 750; }
+.assistant-name { min-width: 0; margin: 0; font-size: 16px; font-weight: 760; overflow-wrap: anywhere; }
+.assistant-card .status-chip { font-size: 11px; }
+.status-chip[data-state="working"] { color: var(--teal); background: var(--teal-tint); }
+.status-chip[data-state="idle"] { color: var(--muted); background: var(--neutral); }
+.status-chip[data-state="idle"]::before { border: 1px solid currentColor; background: transparent; }
+.person-card .status-chip[data-state="upcoming"] { color: #624e80; background: #f1ebf7; }
+.status-chip[data-state="gap"] { color: #755019; background: #faeed9; }
+.status-chip[data-state="rest"] { color: #3f5c76; background: #eaf1f8; }
+.status-chip[data-state="conflict"] { color: #912d40; background: #fae6eb; }
+.person-card[data-state="conflict"] { border-color: #e8c4ce; }
+.person-name { font-size: 17px; font-weight: 760; line-height: 1.25; overflow-wrap: anywhere; }
+.role-tag { padding: 2px 5px; border-radius: 4px; color: var(--host); background: var(--host-tint); font-size: 10px; font-weight: 720; }
+.role-tag[data-role="assistant"] { color: var(--assistant); background: var(--assistant-tint); }
+.role-tag[data-role="dual"] { color: var(--teal); background: var(--teal-tint); }
+.role-tag[data-role="unknown"] { color: var(--muted); background: var(--neutral); }
+.person-assignments { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.person-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.35fr);
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+.person-assignment[data-state="current"] { border-color: var(--teal-line); background: var(--floor-bg); }
+.person-assignment[data-state="conflict"] { border-color: #e8c4ce; background: #fff8f9; }
+.person-assignment[data-state="rest"] { border-color: #dbe6ef; background: #f6f9fc; }
+.assignment-when, .assignment-room { display: grid; min-width: 0; gap: 1px; align-content: start; }
+.assignment-label, .assignment-platform { color: var(--muted); font-size: 11px; }
+.assignment-role, .assignment-note { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.assignment-role { font-weight: 650; }
+.person-conflict { margin: 2px 0 8px; padding: 5px 7px; border-radius: 5px; color: #912d40; background: #fff2f5; font-size: 11px; }
+.assignment-time { font: 730 13px/1.2 "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.assignment-room-link { justify-self: start; margin: -1px -3px; padding: 1px 3px; border: 0; border-radius: 3px; color: var(--teal); background: transparent; font-size: 12px; font-weight: 700; text-align: left; overflow-wrap: anywhere; }
+.assignment-room-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.handoff-room + .handoff-room { margin-top: 9px; }
+.handoff-head, .handoff-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; min-width: 0; }
+.handoff-head { width: 100%; padding: 0; border: 0; border-radius: 4px; background: transparent; text-align: left; }
+.handoff-head .room-heading { font-size: 15px; font-weight: 750; }
+.handoff-head .room-meta { color: var(--muted); font-size: 11px; }
+.detail-link { margin-left: auto; color: var(--teal); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.detail-link::after { margin-left: 4px; content: "→"; }
+.handoff-head:hover .detail-link { text-decoration: underline; text-underline-offset: 3px; }
+.shift-track { display: flex; flex-wrap: wrap; align-items: stretch; gap: 7px; margin: 8px 0 0; padding: 0; list-style: none; }
+.shift-node {
+  display: grid;
+  flex: 1 1 170px;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+.shift-node[data-state="current"] { border-color: var(--teal-line); background: var(--floor-bg); }
+.shift-node[data-state="empty"] { border-style: dashed; }
+.shift-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px 7px; }
+.shift-time { color: var(--ink); font: 760 14px/1.2 "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shift-caption, .shift-gap { color: var(--muted); font-size: 11px; }
+.shift-gap { align-self: center; justify-self: start; max-width: 100%; padding: 2px 6px; border: 1px dashed var(--line); border-radius: 4px; }
+.shift-roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)); gap: 5px; }
+.shift-role { display: grid; gap: 2px; min-width: 0; padding: 4px 6px; border-radius: 5px; color: var(--host); background: var(--host-tint); }
+.shift-role:nth-child(2), .shift-role[data-role="assistant"] { color: var(--assistant); background: var(--assistant-tint); }
+.shift-role .role-name { color: var(--ink); font-size: 13px; }
+
+.empty-state { display: grid; justify-items: start; gap: 5px; padding: 15px; border: 1px dashed var(--line); border-radius: 7px; color: var(--muted); background: var(--surface); font-size: 13px; }
+.empty-state strong { color: var(--ink); font-size: 15px; }
+.empty-action { padding: 5px 8px; border: 1px solid var(--teal-line); border-radius: 5px; color: var(--teal); background: var(--teal-tint); font-weight: 700; }
+.footer { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+
+#detailDialog {
+  width: min(600px, calc(100% - 26px));
+  max-width: none;
+  max-height: calc(100dvh - 26px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 15px 55px rgb(21 43 36 / 20%);
+}
+#detailDialog::backdrop { background: rgb(13 27 23 / 43%); }
+.detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 15px 17px; border-bottom: 1px solid var(--line); }
+.detail-head h2 { font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
+.detail-head p { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.close-button { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--canvas); font: 600 22px/1 "Segoe UI", sans-serif; }
+.close-button:hover { color: var(--coral); background: var(--coral-tint); }
+.detail-body { padding: 13px 17px 17px; }
+.detail-body .shift-track { display: grid; margin-top: 0; }
+
+@media (max-width: 920px) {
+  .roster thead th, .roster tbody :is(td, th[scope="row"]) { padding-inline: 9px; }
+  .people-grid, .assistants-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  :root { --gutter: clamp(11px, 3vw, 20px); }
+  .masthead-inner { min-height: 47px; }
+  .brand { gap: 7px; font-size: 12px; }
+  .brand-mark { width: 30px; height: 23px; }
+  .demo-tag { padding: 3px 6px; font-size: 10px; }
+  .main { padding-top: 13px; }
+  .page-header { flex-wrap: wrap; gap: 7px 12px; margin-bottom: 5px; }
+  .page-copy h1 { font-size: 25px; }
+  .team-field { margin-top: 5px; }
+  .team-field select { min-height: 40px; }
+  .time-controls { align-items: flex-start; gap: 3px; }
+  .time-context { padding: 2px; gap: 2px; }
+  .date-field select, .clock-field input, .context-reset button { min-height: 32px; padding-inline: 4px; }
+  .clock-field input { width: 94px; font-size: 14px; }
+  .date-field select { max-width: 146px; }
+  .context-reset button { font-size: 10px; }
+  .mode-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; margin-bottom: 8px; }
+  .mode-button { min-height: 44px; padding-inline: 0; font-size: 13px; }
+  .panel-head { margin-block: 12px 8px; }
+  .panel-heading h2 { font-size: 18px; }
+  .floor-overview-head { margin-block: 12px 8px; }
+  .floor-overview-head h2, .floor-detail-head h2 { font-size: 19px; }
+  .floor-grid { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .floor-card { min-height: 64px; padding: 8px 10px; border-radius: 7px; }
+  .floor-name { font-size: 18px; }
+  .floor-count { font-size: 12px; }
+  .floor-chevron { width: 29px; height: 29px; font-size: 21px; }
+  .floor-detail-head { margin-block: 5px 8px; }
+  .back-button { min-height: 42px; margin-bottom: 2px; }
+  .pager-button { min-height: 42px; }
+  .filter-bar { gap: 5px 6px; margin-bottom: 8px; }
+  .filter-field { flex-basis: 100px; }
+  .filter-field :is(input, select) { min-height: 39px; padding-inline: 7px; }
+  .filter-field input { font-size: 16px; }
+  .filter-field input::placeholder { font-size: 13px; }
+  .room-search { flex: 1 1 146px; }
+  .person-search { flex: 1 1 160px; }
+  .state-select { flex-basis: 110px; }
+  .result-text, .room-filter-bar .result-text { margin: 2px 1px 0 auto; font-size: 11px; }
+  .room-filter-bar .result-text { flex: 1 0 100%; }
+  .hours-table :is(th, td) { padding-inline: 8px; }
+  .hours-table thead th:last-child { width: 42%; }
+  .hours-note { font-size: 11px; }
+  .roster, .desktop-roster { display: none; }
+  .mobile-rooms { display: block; }
+  .compact {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 6px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface);
+    text-align: left;
+  }
+  .compact:hover { border-color: var(--teal-line); }
+  .compact-head, .compact .room-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 6px;
+    width: 100%;
+    font-size: 15px;
+    font-weight: 760;
+  }
+  .compact-head .status-chip, .compact .room-label .status-chip { margin-left: auto; }
+  .compact-head { flex-wrap: nowrap; justify-content: space-between; }
+  .compact-head > .room-label { flex: 1 1 auto; width: auto; }
+  .compact .room-time { margin: 3px 0 5px; font-size: 11px; }
+  .compact-data {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 4px 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--soft-line);
+  }
+  .compact-data > * { min-width: 0; }
+  .compact-data .current-role {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 0 4px;
+  }
+  .compact-data .role-copy { display: contents; }
+  .compact-data .role-label { grid-column: 1/-1; grid-row: 1; }
+  .compact-data .role-avatar { grid-column: 1; grid-row: 2; margin-right: 0; }
+  .compact-data .role-name { grid-column: 2; grid-row: 2; }
+  .compact-data .current-role[data-vacant="true"] .role-name { grid-column: 1/-1; }
+  .compact-data .room-time { grid-column: 1/-1; }
+  .compact .current-role, .compact .role-name { font-size: 15px; font-weight: 750; line-height: 1.25; }
+  .compact .role-avatar { width: 18px; height: 18px; margin-right: 3px; font-size: 9px; }
+  .compact .compact-label, .compact .role-label { margin-bottom: 2px; }
+  .compact .next { gap: 1px 4px; }
+  .compact .next .compact-label { flex-basis: 100%; }
+  .compact .next-account { flex-basis: 100%; }
+  .compact .next-label, .compact .next time { font-size: 15px; }
+  .compact .next-roles { flex-basis: 100%; font-size: 11px; }
+  .compact > .next { margin-top: 6px; }
+  .shift-track { display: grid; }
+}
+@media (max-width: 520px) {
+  .people-grid, .assistants-grid { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .person-card, .assistant-card, .handoff-room { padding: 9px 10px; }
+  .people-filter-bar .person-search, .assistant-filter-bar .person-search { flex: 1 1 135px; max-width: none; }
+  .people-filter-bar .people-status-field { flex: 0 1 124px; }
+  .people-filter-bar .result-text, .assistant-filter-bar .result-text { flex: 1 0 100%; margin-top: 3px; }
+  .detail-head, .detail-body { padding-inline: 11px; }
+}
+@media (max-width: 340px) {
+  .mode-button { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+
+</style>
+  <noscript><style>.team-field,.time-controls,.mode-nav,.filter-bar,.result-text{display:none}</style></noscript>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳到排班内容</a>
+  <header class="masthead">
+    <div class="shell masthead-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">TCL</span>
+        <span class="brand-text"><strong>TCL MCN 基地</strong></span>
+      </div>
+      <div class="masthead-note"><span class="demo-tag" id="sourceBadge">排班试点</span></div>
+    </div>
+  </header>
+
+  <main class="shell main" id="mainContent" tabindex="-1">
+    <section class="page-header" aria-labelledby="mainTitle">
+      <div class="page-copy">
+        <h1 id="mainTitle">直播间排班</h1>
+        <label class="team-field">
+          <span>排班团队</span>
+          <select id="teamSelect"></select>
+        </label>
+      </div>
+      <div class="time-controls">
+        <span class="time-mode" id="clockMode"></span>
+        <div class="time-context" role="group" aria-label="排班查看日期和时点" aria-describedby="clockMode">
+          <label class="date-field"><span class="sr-only">查看日期</span><select id="daySelect"></select></label>
+          <label class="clock-field"><span class="sr-only">查看时点</span><input id="asOf" type="time" value="14:30" step="60" required></label>
+          <div class="context-reset"><button id="resetContext" type="button">回到示例时点</button></div>
+          <span id="contextText" class="sr-only" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <nav class="mode-nav" id="viewNav" aria-label="选择排班视图">
+      <button type="button" class="mode-button is-active" data-view="rooms" aria-controls="roomsPanel" aria-pressed="true">
+        <span class="mode-name">楼层汇总</span>
+      </button>
+      <button type="button" class="mode-button" data-view="people" aria-controls="peoplePanel" aria-pressed="false">
+        <span class="mode-name">主播状态</span>
+      </button>
+      <button type="button" class="mode-button" data-view="assistants" aria-controls="assistantsPanel" aria-pressed="false">
+        <span class="mode-name">助播工作</span>
+      </button>
+      <button type="button" class="mode-button" data-view="handoff" aria-controls="handoffPanel" aria-pressed="false">
+        <span class="mode-name">全天交接</span>
+      </button>
+      <button type="button" class="mode-button" data-view="hours" aria-controls="hoursPanel" aria-pressed="false">
+        <span class="mode-name">工时统计</span>
+      </button>
+    </nav>
+
+    <section class="panel" id="teamPending" aria-label="团队排班" hidden></section>
+
+    <section class="panel" id="roomsPanel" aria-label="楼层排班">
+      <div id="roomUnavailable" hidden></div>
+      <div id="floorOverview">
+        <header class="floor-overview-head">
+          <h2 id="roomsTitle">选择楼层</h2>
+          <p id="overviewResult" class="overview-result" role="status"></p>
+        </header>
+        <div id="floorCards" class="floor-grid"></div>
+      </div>
+      <div id="floorDetail" aria-labelledby="floorTitle" hidden>
+        <header class="floor-detail-head">
+          <button type="button" id="backFloors" class="back-button">返回楼层汇总</button>
+          <h2 id="floorTitle" tabindex="-1"></h2>
+        </header>
+        <div class="filter-bar room-filter-bar">
+          <label class="filter-field room-search"><span class="sr-only">查找房间或主播</span><input type="search" id="roomSearch" autocomplete="off" placeholder="搜房号、房间或主播"></label>
+          <label class="filter-field state-select"><span class="sr-only">房间状态</span><select id="roomState"><option value="all">全部房间</option><option value="current">仅当前有班</option></select></label>
+          <p class="result-text" id="roomResult" role="status"></p>
+        </div>
+        <div id="roomList"></div>
+        <nav id="roomPager" class="room-pager" aria-label="房间列表分页" hidden></nav>
+      </div>
+      <noscript><div class="empty-state"><strong>请启用 JavaScript</strong><p>启用后即可读取本文件中的排班数据和使用筛选。</p></div></noscript>
+    </section>
+
+    <section class="panel" id="peoplePanel" aria-labelledby="peopleTitle" hidden>
+      <header class="panel-head">
+        <div class="panel-heading">
+          <h2 id="peopleTitle">主播状态</h2>
+          <p>按姓名查看所选日期的主播房间和班次。</p>
+        </div>
+      </header>
+      <p class="attendance-note" id="attendanceNote" role="status" hidden></p>
+      <div class="filter-bar people-filter-bar">
+        <label class="filter-field person-search"><span>主播姓名</span><input id="peopleSearch" type="search" autocomplete="off" placeholder="搜索主播姓名"></label>
+        <label class="filter-field people-status-field">
+          <span>排班状态</span>
+          <select id="peopleStatus">
+            <option value="all">全部状态</option>
+            <option value="current">按排班在班</option>
+            <option value="gap">班间空档</option>
+            <option value="rest">排班休息</option>
+            <option value="upcoming">稍后有班</option>
+            <option value="ended">当日排班已结束</option>
+            <option value="conflict">排班冲突</option>
+          </select>
+        </label>
+        <p class="result-text" id="peopleResult" role="status"></p>
+      </div>
+      <div id="peopleList"></div>
+    </section>
+
+    <section class="panel" id="assistantsPanel" aria-labelledby="assistantsTitle" hidden>
+      <header class="panel-head">
+        <div class="panel-heading">
+          <h2 id="assistantsTitle">助播工作状态</h2>
+          <p>查看所选时点的助播工作安排。</p>
+        </div>
+      </header>
+      <div class="filter-bar assistant-filter-bar">
+        <label class="filter-field person-search"><span>助播姓名</span><input id="assistantSearch" type="search" autocomplete="off" placeholder="搜索助播姓名"></label>
+        <p class="result-text" id="assistantResult" role="status"></p>
+      </div>
+      <div id="assistantList"></div>
+    </section>
+
+    <section class="panel" id="handoffPanel" aria-labelledby="handoffTitle" hidden>
+      <header class="panel-head"><div class="panel-heading"><h2 id="handoffTitle">交接安排</h2><p>查看各房间的当前班、接班人和开始时间。</p></div></header>
+      <div class="filter-bar">
+        <label class="filter-field"><span>楼层</span><select id="handoffFloor"><option value="all">全部楼层</option></select></label>
+        <label class="filter-field"><span>班次范围</span><select id="handoffScope"><option value="next">下一班</option><option value="all">全天班次</option></select></label>
+        <p class="result-text" id="handoffResult" role="status"></p>
+      </div>
+      <div id="handoffList"></div>
+    </section>
+
+    <section class="panel" id="hoursPanel" aria-labelledby="hoursTitle" hidden>
+      <header class="panel-head">
+        <div class="panel-heading">
+          <h2 id="hoursTitle">排班工时</h2>
+          <p id="hoursPeriod"></p>
+        </div>
+      </header>
+      <div id="hoursList"></div>
+      <p class="hours-note" id="hoursNote"></p>
+    </section>
+
+    <footer class="footer" id="sourceNote">页面显示计划排班，实际到岗以现场为准。</footer>
+  </main>
+
+  <dialog id="detailDialog" aria-labelledby="detailTitle" aria-describedby="detailMeta">
+    <header class="detail-head">
+      <div><h2 id="detailTitle"></h2><p id="detailMeta"></p></div>
+      <button id="detailClose" class="close-button" type="button" aria-label="关闭排班详情" autofocus>×</button>
+    </header>
+    <div id="detailContent" class="detail-body"></div>
+  </dialog>
+
+  <script type="application/json" id="scheduleData">{"teams":[{"id":"all-category","name":"全品类大官旗","schedule":{"mode":"real","sourceLabel":"3大官旗-主播排班.xlsx · 26年11月","coverageStart":"2026-11-01","coverageEnd":"2026-11-30","rooms":[{"number":"8楼共用","name":"8 楼共用直播间","platform":"多平台","floor":"8"},{"number":"24号","name":"拼多多","platform":"拼多多","floor":"9"},{"number":"18号","name":"京东大官旗","platform":"京东","floor":""},{"number":"20号","name":"天猫大官旗","platform":"天猫","floor":""}],"shifts":[{"roomNumber":"8楼共用","date":"2026-11-01","start":"08:00","end":"11:00","host":"陈思思","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-01","start":"11:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-01","start":"12:00","end":"17:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-01","start":"20:00","end":"24:00","host":"张雪花","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"08:00","end":"11:00","host":"陈思思","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"11:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"12:00","end":"15:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"15:00","end":"16:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"16:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-02","start":"20:00","end":"24:00","host":"张雪花","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"08:00","end":"11:00","host":"陈思思","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"11:00","end":"12:00","host":"陈双","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"12:00","end":"14:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"14:00","end":"15:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"15:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-03","start":"20:00","end":"24:00","host":"许凤霞","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-04","start":"08:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-04","start":"12:00","end":"14:00","host":"张雪花","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-04","start":"14:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-04","start":"20:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-05","start":"08:00","end":"11:00","host":"付瑞康","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-05","start":"11:00","end":"12:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-05","start":"12:00","end":"17:00","host":"郑明峻","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-05","start":"20:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"08:00","end":"10:00","host":"付瑞康","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"10:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"12:00","end":"14:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"14:00","end":"15:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"15:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-06","start":"20:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-07","start":"08:00","end":"12:00","host":"黄贻金","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-07","start":"12:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-07","start":"20:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-08","start":"08:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-08","start":"12:00","end":"13:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-08","start":"13:00","end":"15:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-08","start":"15:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-08","start":"20:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-09","start":"08:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-09","start":"12:00","end":"13:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-09","start":"13:00","end":"14:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-09","start":"14:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-09","start":"20:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-10","start":"08:00","end":"12:00","host":"杨心雨","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-10","start":"12:00","end":"13:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-10","start":"13:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-10","start":"20:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-11","start":"08:00","end":"12:00","host":"杨心雨","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-11","start":"12:00","end":"13:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-11","start":"13:00","end":"17:00","host":"张雪花","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-11","start":"20:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-12","start":"08:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-12","start":"12:00","end":"15:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-12","start":"15:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-12","start":"20:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-13","start":"08:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-13","start":"12:00","end":"16:00","host":"张雪花","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-13","start":"16:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-13","start":"20:00","end":"22:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-13","start":"22:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-14","start":"08:00","end":"12:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-14","start":"12:00","end":"14:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-14","start":"14:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-14","start":"20:00","end":"22:00","host":"郑明峻","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-14","start":"22:00","end":"24:00","host":"陈思思","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-15","start":"08:00","end":"12:00","host":"陈双","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-15","start":"12:00","end":"13:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-15","start":"13:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-15","start":"20:00","end":"24:00","host":"郑明峻","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"08:00","end":"12:00","host":"陈双","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"12:00","end":"13:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"13:00","end":"14:00","host":"郑明峻","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"14:00","end":"17:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"20:00","end":"22:00","host":"郑明峻","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-16","start":"22:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"08:00","end":"12:00","host":"林慧霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"12:00","end":"13:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"13:00","end":"16:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"16:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"20:00","end":"22:00","host":"郑明峻","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-17","start":"22:00","end":"24:00","host":"郭晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-18","start":"08:00","end":"11:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-18","start":"11:00","end":"12:00","host":"郭晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-18","start":"12:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-18","start":"20:00","end":"24:00","host":"林慧霞","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"08:00","end":"12:00","host":"杨心雨","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"12:00","end":"13:00","host":"杨心雨","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"13:00","end":"14:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"14:00","end":"15:00","host":"杨心雨","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"15:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-19","start":"20:00","end":"24:00","host":"林慧霞","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-20","start":"08:00","end":"11:00","host":"杨心雨","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-20","start":"11:00","end":"12:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-20","start":"12:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-20","start":"20:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-21","start":"08:00","end":"12:00","host":"杨心雨","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-21","start":"12:00","end":"14:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-21","start":"14:00","end":"16:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-21","start":"16:00","end":"17:00","host":"付瑞康","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-21","start":"20:00","end":"24:00","host":"许凤霞","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-22","start":"08:00","end":"12:00","host":"郭晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-22","start":"12:00","end":"14:00","host":"郑明峻","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-22","start":"14:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-22","start":"20:00","end":"24:00","host":"许凤霞","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-23","start":"08:00","end":"12:00","host":"郭晶晶","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-23","start":"12:00","end":"13:00","host":"郑明峻","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-23","start":"13:00","end":"15:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-23","start":"15:00","end":"17:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-23","start":"20:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-24","start":"08:00","end":"12:00","host":"林慧霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-24","start":"12:00","end":"13:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-24","start":"13:00","end":"15:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-24","start":"15:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-24","start":"20:00","end":"24:00","host":"张雪花","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-25","start":"08:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-25","start":"12:00","end":"13:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-25","start":"13:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-25","start":"20:00","end":"22:00","host":"谢晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-25","start":"22:00","end":"24:00","host":"陈双","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"08:00","end":"11:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"11:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"12:00","end":"13:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"13:00","end":"14:00","host":"郑明峻","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"14:00","end":"15:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"15:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"20:00","end":"22:00","host":"谢晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-26","start":"22:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"08:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"12:00","end":"13:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"13:00","end":"14:00","host":"陈双","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"14:00","end":"15:00","host":"林慧霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"15:00","end":"17:00","host":"郭晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-27","start":"20:00","end":"24:00","host":"谢晶晶","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-28","start":"08:00","end":"11:00","host":"黄贻金","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-28","start":"11:00","end":"12:00","host":"付瑞康","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-28","start":"12:00","end":"13:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-28","start":"13:00","end":"17:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-28","start":"20:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-29","start":"08:00","end":"12:00","host":"郑明峻","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-29","start":"12:00","end":"14:00","host":"杨心雨","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-29","start":"14:00","end":"17:00","host":"许凤霞","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-29","start":"20:00","end":"24:00","host":"郑明峻","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"08:00","end":"11:00","host":"林慧霞","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"11:00","end":"12:00","host":"黄贻金","platform":"天猫","account":"天猫小号"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"12:00","end":"14:00","host":"黄贻金","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"14:00","end":"15:00","host":"陈思思","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"15:00","end":"17:00","host":"谢晶晶","platform":"快手","account":"快手直播"},{"roomNumber":"8楼共用","date":"2026-11-30","start":"20:00","end":"24:00","host":"付瑞康","platform":"小红书/视频号","account":"小红书/视频号直播"},{"roomNumber":"24号","date":"2026-11-01","start":"19:00","end":"20:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-01","start":"20:00","end":"21:00","host":"林慧霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-01","start":"21:00","end":"24:00","host":"陈双","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-02","start":"19:00","end":"24:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-03","start":"19:00","end":"20:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-03","start":"20:00","end":"24:00","host":"林慧霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-04","start":"19:00","end":"24:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-05","start":"19:00","end":"24:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-06","start":"19:00","end":"23:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-06","start":"23:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-07","start":"19:00","end":"20:00","host":"陈思思","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-07","start":"20:00","end":"24:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-08","start":"19:00","end":"20:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-08","start":"20:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-09","start":"19:00","end":"20:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-09","start":"20:00","end":"22:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-09","start":"22:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-10","start":"19:00","end":"24:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-11","start":"19:00","end":"20:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-11","start":"20:00","end":"21:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-11","start":"21:00","end":"24:00","host":"林慧霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-12","start":"19:00","end":"24:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-13","start":"19:00","end":"20:00","host":"陈思思","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-13","start":"20:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-14","start":"19:00","end":"20:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-14","start":"20:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-15","start":"19:00","end":"20:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-15","start":"20:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-16","start":"19:00","end":"20:00","host":"陈思思","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-16","start":"20:00","end":"21:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-16","start":"21:00","end":"22:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-16","start":"22:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-17","start":"19:00","end":"20:00","host":"谢晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-17","start":"20:00","end":"21:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-17","start":"21:00","end":"22:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-17","start":"22:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-18","start":"19:00","end":"20:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-18","start":"20:00","end":"24:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-19","start":"19:00","end":"24:00","host":"郭晶晶","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-20","start":"19:00","end":"20:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-20","start":"20:00","end":"24:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-21","start":"19:00","end":"22:00","host":"林慧霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-21","start":"22:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-22","start":"19:00","end":"20:00","host":"许凤霞","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-22","start":"20:00","end":"24:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-23","start":"19:00","end":"20:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-23","start":"20:00","end":"22:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-23","start":"22:00","end":"24:00","host":"陈双","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-24","start":"19:00","end":"20:00","host":"张雪花","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-24","start":"20:00","end":"24:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-25","start":"19:00","end":"24:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-26","start":"19:00","end":"24:00","host":"陈双","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-27","start":"19:00","end":"20:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-27","start":"20:00","end":"24:00","host":"张雪花","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-28","start":"19:00","end":"22:00","host":"陈双","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-28","start":"22:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-29","start":"19:00","end":"20:00","host":"郑明峻","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-29","start":"20:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-30","start":"19:00","end":"20:00","host":"付瑞康","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-30","start":"20:00","end":"22:00","host":"黄贻金","platform":"拼多多","account":"拼多多"},{"roomNumber":"24号","date":"2026-11-30","start":"22:00","end":"24:00","host":"杨心雨","platform":"拼多多","account":"拼多多"},{"roomNumber":"18号","date":"2026-11-01","start":"08:00","end":"11:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-01","start":"11:00","end":"13:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-01","start":"13:00","end":"15:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-01","start":"15:00","end":"19:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-01","start":"19:00","end":"24:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-02","start":"08:00","end":"11:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-02","start":"11:00","end":"13:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-02","start":"13:00","end":"16:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-02","start":"16:00","end":"20:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-02","start":"20:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-03","start":"08:00","end":"13:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-03","start":"13:00","end":"18:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-03","start":"18:00","end":"24:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"08:00","end":"13:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"13:00","end":"14:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"14:00","end":"16:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"16:00","end":"18:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"18:00","end":"19:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-04","start":"19:00","end":"24:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"12:00","end":"13:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"13:00","end":"15:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"15:00","end":"16:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"16:00","end":"18:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-05","start":"18:00","end":"24:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-06","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-06","start":"12:00","end":"15:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-06","start":"15:00","end":"16:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-06","start":"16:00","end":"19:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-06","start":"19:00","end":"24:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"08:00","end":"11:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"11:00","end":"12:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"12:00","end":"15:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"15:00","end":"18:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"18:00","end":"19:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-07","start":"19:00","end":"24:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"08:00","end":"11:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"11:00","end":"13:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"13:00","end":"15:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"15:00","end":"18:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"18:00","end":"20:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-08","start":"20:00","end":"24:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"08:00","end":"11:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"11:00","end":"13:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"13:00","end":"15:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"15:00","end":"19:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"19:00","end":"20:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"20:00","end":"23:00","host":"付瑞康/陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-09","start":"23:00","end":"01:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-10","start":"08:00","end":"12:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-10","start":"12:00","end":"15:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-10","start":"15:00","end":"18:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-10","start":"18:00","end":"20:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-10","start":"20:00","end":"24:00","host":"郭晶晶/陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"00:00","end":"01:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"08:00","end":"14:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"14:00","end":"16:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"16:00","end":"18:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"18:00","end":"19:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"19:00","end":"20:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"20:00","end":"21:00","host":"付瑞康/陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-11","start":"21:00","end":"24:00","host":"付瑞康/陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"00:00","end":"01:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"08:00","end":"11:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"11:00","end":"13:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"13:00","end":"15:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"15:00","end":"18:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-12","start":"18:00","end":"24:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-13","start":"08:00","end":"13:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-13","start":"13:00","end":"17:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-13","start":"17:00","end":"22:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-13","start":"22:00","end":"24:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"08:00","end":"12:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"12:00","end":"13:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"13:00","end":"17:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"17:00","end":"18:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"18:00","end":"20:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"20:00","end":"22:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-14","start":"22:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-15","start":"08:00","end":"13:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-15","start":"13:00","end":"15:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-15","start":"15:00","end":"20:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-15","start":"20:00","end":"24:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-16","start":"08:00","end":"12:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-16","start":"12:00","end":"16:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-16","start":"16:00","end":"20:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-16","start":"20:00","end":"24:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-17","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-17","start":"12:00","end":"16:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-17","start":"16:00","end":"20:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-17","start":"20:00","end":"24:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-18","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-18","start":"12:00","end":"15:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-18","start":"15:00","end":"18:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-18","start":"18:00","end":"20:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-18","start":"20:00","end":"24:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-19","start":"08:00","end":"13:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-19","start":"13:00","end":"16:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-19","start":"16:00","end":"18:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-19","start":"18:00","end":"20:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-19","start":"20:00","end":"24:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"08:00","end":"11:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"11:00","end":"13:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"13:00","end":"16:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"16:00","end":"17:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"17:00","end":"18:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"18:00","end":"20:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-20","start":"20:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-21","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-21","start":"12:00","end":"14:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-21","start":"14:00","end":"16:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-21","start":"16:00","end":"19:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-21","start":"19:00","end":"24:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"08:00","end":"12:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"12:00","end":"14:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"14:00","end":"15:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"15:00","end":"17:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"17:00","end":"19:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"19:00","end":"22:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-22","start":"22:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-23","start":"08:00","end":"13:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-23","start":"13:00","end":"16:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-23","start":"16:00","end":"18:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-23","start":"18:00","end":"22:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-23","start":"22:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-24","start":"08:00","end":"13:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-24","start":"13:00","end":"16:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-24","start":"16:00","end":"18:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-24","start":"18:00","end":"22:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-24","start":"22:00","end":"24:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-25","start":"08:00","end":"12:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-25","start":"12:00","end":"18:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-25","start":"18:00","end":"22:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-25","start":"22:00","end":"24:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-26","start":"08:00","end":"12:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-26","start":"12:00","end":"17:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-26","start":"17:00","end":"22:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-26","start":"22:00","end":"24:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"08:00","end":"12:00","host":"郭晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"12:00","end":"14:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"14:00","end":"17:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"17:00","end":"20:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"20:00","end":"23:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-27","start":"23:00","end":"24:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"08:00","end":"12:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"12:00","end":"14:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"14:00","end":"17:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"17:00","end":"18:00","host":"陈双","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"18:00","end":"22:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-28","start":"22:00","end":"24:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"08:00","end":"12:00","host":"许凤霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"12:00","end":"13:00","host":"郑明峻","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"13:00","end":"17:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"17:00","end":"18:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"18:00","end":"22:00","host":"付瑞康","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-29","start":"22:00","end":"24:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-30","start":"08:00","end":"13:00","host":"陈思思","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-30","start":"13:00","end":"17:00","host":"张雪花","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-30","start":"17:00","end":"18:00","host":"林慧霞","platform":"京东","account":"京东大官旗"},{"roomNumber":"18号","date":"2026-11-30","start":"18:00","end":"24:00","host":"谢晶晶","platform":"京东","account":"京东大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"07:00","end":"12:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"12:00","end":"13:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"13:00","end":"15:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"15:00","end":"19:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"19:00","end":"21:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-01","start":"21:00","end":"02:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-02","start":"07:00","end":"12:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-02","start":"12:00","end":"15:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-02","start":"15:00","end":"16:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-02","start":"16:00","end":"19:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-02","start":"19:00","end":"24:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-03","start":"00:00","end":"01:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-03","start":"07:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-03","start":"12:00","end":"14:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-03","start":"14:00","end":"20:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-03","start":"20:00","end":"24:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-04","start":"00:00","end":"01:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-04","start":"07:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-04","start":"12:00","end":"16:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-04","start":"16:00","end":"19:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-04","start":"19:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"07:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"12:00","end":"13:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"13:00","end":"16:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"16:00","end":"18:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"18:00","end":"19:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"19:00","end":"21:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-05","start":"21:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"07:00","end":"10:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"10:00","end":"11:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"11:00","end":"13:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"13:00","end":"16:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"16:00","end":"19:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-06","start":"19:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-07","start":"07:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-07","start":"12:00","end":"16:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-07","start":"16:00","end":"20:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-07","start":"20:00","end":"24:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"00:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"07:00","end":"11:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"11:00","end":"13:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"13:00","end":"18:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"18:00","end":"19:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"19:00","end":"20:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-08","start":"20:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"07:00","end":"11:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"11:00","end":"13:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"13:00","end":"15:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"15:00","end":"18:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"18:00","end":"19:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-09","start":"19:00","end":"24:00","host":"林慧霞/张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"00:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"01:00","end":"03:00","host":"高玮雄","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"07:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"12:00","end":"15:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"15:00","end":"18:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-10","start":"18:00","end":"24:00","host":"林慧霞/张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"00:00","end":"02:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"07:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"12:00","end":"15:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"15:00","end":"16:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"16:00","end":"18:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"18:00","end":"21:00","host":"林慧霞/张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-11","start":"21:00","end":"24:00","host":"郑明峻/陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"00:00","end":"02:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"07:00","end":"11:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"11:00","end":"13:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"13:00","end":"15:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"15:00","end":"19:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-12","start":"19:00","end":"24:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"00:00","end":"01:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"07:00","end":"11:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"11:00","end":"14:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"14:00","end":"17:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"17:00","end":"19:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-13","start":"19:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"07:00","end":"12:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"12:00","end":"13:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"13:00","end":"17:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"17:00","end":"20:00","host":"高玮雄","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"20:00","end":"22:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-14","start":"22:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"07:00","end":"12:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"12:00","end":"13:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"13:00","end":"15:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"15:00","end":"17:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"17:00","end":"20:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-15","start":"20:00","end":"01:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-16","start":"07:00","end":"11:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-16","start":"11:00","end":"13:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-16","start":"13:00","end":"17:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-16","start":"17:00","end":"19:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-16","start":"19:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"07:00","end":"11:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"11:00","end":"14:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"14:00","end":"17:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"17:00","end":"19:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"19:00","end":"20:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-17","start":"20:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"07:00","end":"11:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"11:00","end":"13:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"13:00","end":"15:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"15:00","end":"17:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"17:00","end":"20:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-18","start":"20:00","end":"24:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"00:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"07:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"12:00","end":"14:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"14:00","end":"16:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"16:00","end":"20:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-19","start":"20:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"07:00","end":"11:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"11:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"12:00","end":"17:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"17:00","end":"18:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"18:00","end":"19:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-20","start":"19:00","end":"01:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-21","start":"07:00","end":"13:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-21","start":"13:00","end":"16:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-21","start":"16:00","end":"18:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-21","start":"18:00","end":"24:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-22","start":"00:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-22","start":"07:00","end":"13:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-22","start":"13:00","end":"18:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-22","start":"18:00","end":"22:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-22","start":"22:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-23","start":"07:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-23","start":"12:00","end":"16:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-23","start":"16:00","end":"18:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-23","start":"18:00","end":"22:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-23","start":"22:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-24","start":"07:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-24","start":"12:00","end":"17:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-24","start":"17:00","end":"19:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-24","start":"19:00","end":"22:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-24","start":"22:00","end":"24:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"00:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"07:00","end":"13:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"13:00","end":"14:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"14:00","end":"15:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"15:00","end":"17:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"17:00","end":"19:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-25","start":"19:00","end":"01:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-26","start":"07:00","end":"12:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-26","start":"12:00","end":"13:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-26","start":"13:00","end":"15:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-26","start":"15:00","end":"19:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-26","start":"19:00","end":"01:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"07:00","end":"12:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"12:00","end":"13:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"13:00","end":"15:00","host":"郭晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"15:00","end":"19:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"19:00","end":"23:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-27","start":"23:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"07:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"12:00","end":"13:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"13:00","end":"15:00","host":"陈双","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"15:00","end":"17:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"17:00","end":"18:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"18:00","end":"22:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-28","start":"22:00","end":"24:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"00:00","end":"01:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"07:00","end":"12:00","host":"陈思思","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"12:00","end":"13:00","host":"许凤霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"13:00","end":"16:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"16:00","end":"19:00","host":"高玮雄","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"19:00","end":"22:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-29","start":"22:00","end":"24:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-30","start":"00:00","end":"01:00","host":"谢晶晶","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-30","start":"07:00","end":"12:00","host":"张雪花","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-30","start":"12:00","end":"17:00","host":"林慧霞","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-30","start":"17:00","end":"19:00","host":"付瑞康","platform":"天猫","account":"天猫大官旗"},{"roomNumber":"20号","date":"2026-11-30","start":"19:00","end":"01:00","host":"郑明峻","platform":"天猫","account":"天猫大官旗"}],"restDays":[{"date":"2026-11-13","name":"谢晶晶"},{"date":"2026-11-13","name":"陈双"},{"date":"2026-11-14","name":"张雪花"},{"date":"2026-11-14","name":"林慧霞"},{"date":"2026-11-14","name":"郭晶晶"},{"date":"2026-11-14","name":"陈双"},{"date":"2026-11-15","name":"张雪花"},{"date":"2026-11-15","name":"林慧霞"},{"date":"2026-11-15","name":"谢晶晶"},{"date":"2026-11-16","name":"付瑞康"},{"date":"2026-11-16","name":"许凤霞"},{"date":"2026-11-17","name":"付瑞康"},{"date":"2026-11-17","name":"许凤霞"},{"date":"2026-11-18","name":"付瑞康"},{"date":"2026-11-18","name":"陈思思"},{"date":"2026-11-19","name":"付瑞康"},{"date":"2026-11-19","name":"郑明峻"},{"date":"2026-11-19","name":"陈思思"},{"date":"2026-11-20","name":"陈双"},{"date":"2026-11-21","name":"张雪花"},{"date":"2026-11-21","name":"谢晶晶"},{"date":"2026-11-21","name":"郭晶晶"},{"date":"2026-11-22","name":"张雪花"},{"date":"2026-11-22","name":"林慧霞"},{"date":"2026-11-22","name":"谢晶晶"},{"date":"2026-11-23","name":"许凤霞"},{"date":"2026-11-24","name":"许凤霞"},{"date":"2026-11-25","name":"郑明峻"},{"date":"2026-11-26","name":"陈思思"},{"date":"2026-11-27","name":"陈思思"},{"date":"2026-11-28","name":"林慧霞"},{"date":"2026-11-28","name":"郑明峻"},{"date":"2026-11-28","name":"郭晶晶"},{"date":"2026-11-29","name":"张雪花"},{"date":"2026-11-29","name":"林慧霞"},{"date":"2026-11-29","name":"郭晶晶"},{"date":"2026-11-29","name":"陈双"},{"date":"2026-11-30","name":"许凤霞"},{"date":"2026-11-30","name":"郭晶晶"},{"date":"2026-11-30","name":"陈双"}],"assistantShifts":[{"name":"杨心雨","date":"2026-11-01","sourceDate":"2026-11-01","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-02","sourceDate":"2026-11-02","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-03","sourceDate":"2026-11-03","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-04","sourceDate":"2026-11-04","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-05","sourceDate":"2026-11-05","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-06","sourceDate":"2026-11-06","start":"15:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-07","sourceDate":"2026-11-07","start":"14:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-08","sourceDate":"2026-11-08","start":"14:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-09","sourceDate":"2026-11-09","start":"12:00","end":"20:00"},{"name":"杨心雨","date":"2026-11-09","sourceDate":"2026-11-09","start":"22:00","end":"23:00"},{"name":"杨心雨","date":"2026-11-10","sourceDate":"2026-11-10","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-11","sourceDate":"2026-11-11","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-12","sourceDate":"2026-11-12","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-13","sourceDate":"2026-11-13","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-16","sourceDate":"2026-11-16","start":"14:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-17","sourceDate":"2026-11-17","start":"14:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-18","sourceDate":"2026-11-18","start":"12:00","end":"17:00"},{"name":"杨心雨","date":"2026-11-18","sourceDate":"2026-11-18","start":"18:00","end":"22:00"},{"name":"杨心雨","date":"2026-11-19","sourceDate":"2026-11-19","start":"08:00","end":"17:00"},{"name":"杨心雨","date":"2026-11-20","sourceDate":"2026-11-20","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-21","sourceDate":"2026-11-21","start":"07:00","end":"16:00"},{"name":"杨心雨","date":"2026-11-24","sourceDate":"2026-11-24","start":"15:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-25","sourceDate":"2026-11-25","start":"15:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-26","sourceDate":"2026-11-26","start":"15:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-27","sourceDate":"2026-11-27","start":"15:00","end":"24:00"},{"name":"杨心雨","date":"2026-11-28","sourceDate":"2026-11-28","start":"16:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-29","sourceDate":"2026-11-29","start":"16:00","end":"01:00"},{"name":"杨心雨","date":"2026-11-30","sourceDate":"2026-11-30","start":"16:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-01","sourceDate":"2026-11-01","start":"16:00","end":"02:00"},{"name":"黄贻金","date":"2026-11-02","sourceDate":"2026-11-02","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-03","sourceDate":"2026-11-03","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-04","sourceDate":"2026-11-04","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-05","sourceDate":"2026-11-05","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-06","sourceDate":"2026-11-06","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-07","sourceDate":"2026-11-07","start":"12:00","end":"23:00"},{"name":"黄贻金","date":"2026-11-08","sourceDate":"2026-11-08","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-09","sourceDate":"2026-11-09","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-09","sourceDate":"2026-11-09","start":"21:00","end":"22:00"},{"name":"黄贻金","date":"2026-11-10","sourceDate":"2026-11-09","start":"00:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-10","sourceDate":"2026-11-10","start":"14:00","end":"01:00"},{"name":"黄贻金","date":"2026-11-11","sourceDate":"2026-11-11","start":"14:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-13","sourceDate":"2026-11-13","start":"12:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-14","sourceDate":"2026-11-14","start":"12:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-15","sourceDate":"2026-11-15","start":"12:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-16","sourceDate":"2026-11-16","start":"12:00","end":"22:00"},{"name":"黄贻金","date":"2026-11-17","sourceDate":"2026-11-17","start":"12:00","end":"22:00"},{"name":"黄贻金","date":"2026-11-21","sourceDate":"2026-11-21","start":"15:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-22","sourceDate":"2026-11-22","start":"15:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-23","sourceDate":"2026-11-23","start":"15:00","end":"24:00"},{"name":"黄贻金","date":"2026-11-24","sourceDate":"2026-11-24","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-25","sourceDate":"2026-11-25","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-26","sourceDate":"2026-11-26","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-27","sourceDate":"2026-11-27","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-28","sourceDate":"2026-11-28","start":"07:00","end":"16:00"},{"name":"黄贻金","date":"2026-11-30","sourceDate":"2026-11-30","start":"10:00","end":"17:00"},{"name":"黄贻金","date":"2026-11-30","sourceDate":"2026-11-30","start":"20:00","end":"22:00"},{"name":"李柬君","date":"2026-11-01","sourceDate":"2026-11-01","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-02","sourceDate":"2026-11-02","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-03","sourceDate":"2026-11-03","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-04","sourceDate":"2026-11-04","start":"14:00","end":"24:00"},{"name":"李柬君","date":"2026-11-05","sourceDate":"2026-11-05","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-06","sourceDate":"2026-11-06","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-07","sourceDate":"2026-11-07","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-08","sourceDate":"2026-11-08","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-09","sourceDate":"2026-11-09","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-10","sourceDate":"2026-11-10","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-11","sourceDate":"2026-11-11","start":"15:00","end":"02:00"},{"name":"李柬君","date":"2026-11-12","sourceDate":"2026-11-12","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-13","sourceDate":"2026-11-13","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-14","sourceDate":"2026-11-14","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-15","sourceDate":"2026-11-15","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-16","sourceDate":"2026-11-16","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-17","sourceDate":"2026-11-17","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-18","sourceDate":"2026-11-18","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-19","sourceDate":"2026-11-19","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-20","sourceDate":"2026-11-20","start":"15:00","end":"01:00"},{"name":"李柬君","date":"2026-11-21","sourceDate":"2026-11-21","start":"12:00","end":"18:00"},{"name":"李柬君","date":"2026-11-21","sourceDate":"2026-11-21","start":"19:00","end":"22:00"},{"name":"李柬君","date":"2026-11-22","sourceDate":"2026-11-22","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-23","sourceDate":"2026-11-23","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-24","sourceDate":"2026-11-24","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-29","sourceDate":"2026-11-29","start":"07:00","end":"16:00"},{"name":"李柬君","date":"2026-11-30","sourceDate":"2026-11-30","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-02","sourceDate":"2026-11-02","start":"12:00","end":"22:00"},{"name":"詹嘉欣","date":"2026-11-03","sourceDate":"2026-11-03","start":"12:00","end":"22:00"},{"name":"詹嘉欣","date":"2026-11-04","sourceDate":"2026-11-04","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-05","sourceDate":"2026-11-05","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-06","sourceDate":"2026-11-06","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-07","sourceDate":"2026-11-07","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-08","sourceDate":"2026-11-08","start":"15:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-09","sourceDate":"2026-11-09","start":"15:00","end":"03:00"},{"name":"詹嘉欣","date":"2026-11-10","sourceDate":"2026-11-10","start":"15:00","end":"02:00"},{"name":"詹嘉欣","date":"2026-11-11","sourceDate":"2026-11-11","start":"15:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-12","sourceDate":"2026-11-12","start":"15:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-14","sourceDate":"2026-11-14","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-15","sourceDate":"2026-11-15","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-16","sourceDate":"2026-11-16","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-17","sourceDate":"2026-11-17","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-18","sourceDate":"2026-11-18","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-19","sourceDate":"2026-11-19","start":"07:00","end":"16:00"},{"name":"詹嘉欣","date":"2026-11-21","sourceDate":"2026-11-21","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-22","sourceDate":"2026-11-22","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-23","sourceDate":"2026-11-23","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-24","sourceDate":"2026-11-24","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-25","sourceDate":"2026-11-25","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-26","sourceDate":"2026-11-26","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-28","sourceDate":"2026-11-28","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-29","sourceDate":"2026-11-29","start":"16:00","end":"01:00"},{"name":"詹嘉欣","date":"2026-11-30","sourceDate":"2026-11-30","start":"16:00","end":"01:00"},{"name":"胡惠婷","date":"2026-11-01","sourceDate":"2026-11-01","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-01","sourceDate":"2026-11-01","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-02","sourceDate":"2026-11-02","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-02","sourceDate":"2026-11-02","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-03","sourceDate":"2026-11-03","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-03","sourceDate":"2026-11-03","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-04","sourceDate":"2026-11-04","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-04","sourceDate":"2026-11-04","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-05","sourceDate":"2026-11-05","start":"12:00","end":"15:00"},{"name":"胡惠婷","date":"2026-11-05","sourceDate":"2026-11-05","start":"16:00","end":"22:00"},{"name":"胡惠婷","date":"2026-11-06","sourceDate":"2026-11-06","start":"12:00","end":"15:00"},{"name":"胡惠婷","date":"2026-11-06","sourceDate":"2026-11-06","start":"16:00","end":"22:00"},{"name":"胡惠婷","date":"2026-11-07","sourceDate":"2026-11-07","start":"12:00","end":"15:00"},{"name":"胡惠婷","date":"2026-11-07","sourceDate":"2026-11-07","start":"16:00","end":"22:00"},{"name":"胡惠婷","date":"2026-11-08","sourceDate":"2026-11-08","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-08","sourceDate":"2026-11-08","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-09","sourceDate":"2026-11-09","start":"08:00","end":"11:00"},{"name":"胡惠婷","date":"2026-11-09","sourceDate":"2026-11-09","start":"12:00","end":"18:00"},{"name":"胡惠婷","date":"2026-11-10","sourceDate":"2026-11-10","start":"12:00","end":"15:00"},{"name":"胡惠婷","date":"2026-11-10","sourceDate":"2026-11-10","start":"16:00","end":"22:00"},{"name":"胡惠婷","date":"2026-11-11","sourceDate":"2026-11-11","start":"12:00","end":"15:00"},{"name":"胡惠婷","date":"2026-11-11","sourceDate":"2026-11-11","start":"16:00","end":"22:00"}],"assistantRestDays":[{"name":"詹嘉欣","date":"2026-11-01"},{"name":"黄贻金","date":"2026-11-12"},{"name":"詹嘉欣","date":"2026-11-13"},{"name":"杨心雨","date":"2026-11-14"},{"name":"杨心雨","date":"2026-11-15"},{"name":"黄贻金","date":"2026-11-18"},{"name":"黄贻金","date":"2026-11-19"},{"name":"詹嘉欣","date":"2026-11-20"},{"name":"黄贻金","date":"2026-11-20"},{"name":"杨心雨","date":"2026-11-22"},{"name":"杨心雨","date":"2026-11-23"},{"name":"李柬君","date":"2026-11-25"},{"name":"李柬君","date":"2026-11-26"},{"name":"李柬君","date":"2026-11-27"},{"name":"詹嘉欣","date":"2026-11-27"},{"name":"李柬君","date":"2026-11-28"},{"name":"黄贻金","date":"2026-11-29"}],"assistantSourceLabel":"3大官旗-主播排班.xlsx · 26年11月个人排班区","assistantGroups":[{"name":"全品类大官旗","members":[{"name":"杨心雨"},{"name":"詹嘉欣"},{"name":"黄贻金"},{"name":"李柬君"}]},{"name":"校招","members":[{"name":"胡惠婷"}]}],"hoursMonth":"2026-11","hostHoursTeam":"全品类大官旗"}},{"id":"tcl-tv","name":"TCL电视直播间"}]}</script>
+  <script>
+(() => {
+  "use strict";
+
+  const minutesPerDay = 1440;
+  const dayMs = minutesPerDay * 60000;
+  const byId = (id) => document.getElementById(id);
+  const collator = new Intl.Collator("zh-CN", { numeric: true });
+  const shanghaiClock = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  });
+
+  let teams = [];
+  let selectedTeam;
+  let schedule = unavailableSchedule();
+  let dataError;
+  try {
+    teams = readTeams(JSON.parse(byId("scheduleData")?.textContent));
+    selectedTeam = teams[0];
+    loadTeamSchedule();
+  } catch (error) {
+    dataError = error instanceof ScheduleError ? error.message : "排班数据格式有误";
+  }
+  let live;
+  let timer;
+  let selectedDay;
+  let asOfMinutes;
+  let selectedView = "rooms";
+  let hoursRendered = false;
+  let selectedFloor = null;
+  let roomPage = 1;
+  const roomsPerPage = 12;
+  let dialogTrigger;
+  let detailRoomNumber;
+
+  const labels = {
+    current: "当前有班",
+    upcoming: "待开始",
+    ended: "当日已结束",
+    empty: "全天未排班",
+  };
+  const personLabels = {
+    current: "按排班在班", gap: "班间空档", rest: "排班休息",
+    upcoming: "稍后有班", ended: "当日排班已结束",
+  };
+
+  function clock(minutes) {
+    const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
+    return hours + ":" + String(minutes % 60).padStart(2, "0");
+  }
+
+  function dateKey(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const date = new Date(value + "T00:00:00Z");
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : null;
+  }
+
+  function dateStart(date) {
+    return Date.parse(date + "T00:00:00Z");
+  }
+
+  function dayLabel(date, showYear = false) {
+    const [year, month, day] = date.split("-").map(Number);
+    const weekday = "日一二三四五六"[new Date(dateStart(date)).getUTCDay()];
+    return (showYear ? year + " 年 " : "") + month + " 月 " + day + " 日 · 周" + weekday;
+  }
+
+  function parseTime(value, allowEndOfDay = false) {
+    if (allowEndOfDay && value === "24:00") return minutesPerDay;
+    if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  }
+
+  function nowInShanghai() {
+    const parts = Object.fromEntries(shanghaiClock.formatToParts().map(({ type, value }) => [type, value]));
+    return { date: [parts.year, parts.month, parts.day].join("-"), minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+  }
+
+  function textField(value) {
+    return typeof value === "string" || Number.isFinite(value) ? String(value).trim() : "";
+  }
+
+  function combinedName(name) {
+    return /[/／、\n]/.test(name);
+  }
+
+  function identityKey(name, id) {
+    return id && !combinedName(name) ? "id:" + id : "name:" + name;
+  }
+
+  function ScheduleError(message) {
+    this.message = message;
+  }
+
+  function unavailableSchedule() {
+    return { mode: "unavailable", rooms: [], dates: [], roomDates: [], byRoom: new Map() };
+  }
+
+  function readTeams(data) {
+    if (data?.teams === undefined) {
+      return [{ id: "default", name: textField(data?.hostHoursTeam) || "当前排班", schedule: data }];
+    }
+    if (!Array.isArray(data.teams) || !data.teams.length) throw new ScheduleError("团队列表格式有误");
+    const ids = new Set();
+    return data.teams.map((record) => {
+      const id = textField(record?.id);
+      const name = textField(record?.name);
+      if (!id || !name || ids.has(id)) throw new ScheduleError("团队名称或编号有误");
+      ids.add(id);
+      return { id, name, schedule: record.schedule, pending: record.schedule == null };
+    });
+  }
+
+  function isPendingTeam() {
+    return selectedTeam?.pending === true;
+  }
+
+  function loadTeamSchedule() {
+    dataError = undefined;
+    schedule = unavailableSchedule();
+    if (isPendingTeam()) return;
+    try {
+      schedule = readSchedule(selectedTeam.schedule);
+    } catch (error) {
+      dataError = error instanceof ScheduleError ? error.message : "排班数据格式有误";
+    }
+  }
+
+  function readInterval(record) {
+    const date = dateKey(record?.date);
+    const start = parseTime(record?.start);
+    const end = parseTime(record?.end, true);
+    if (!date || start === null || end === null || start === end) return null;
+    const beginning = dateStart(date);
+    return {
+      date,
+      startsAt: beginning + start * 60000,
+      endsAt: beginning + (end < start ? end + minutesPerDay : end) * 60000,
+    };
+  }
+
+  function collectDates(dates, interval) {
+    dates.add(interval.date);
+    const midnight = dateStart(interval.date) + dayMs;
+    if (interval.endsAt > midnight) dates.add(new Date(midnight).toISOString().slice(0, 10));
+  }
+
+  function readSourceDate(record, interval) {
+    if (record.sourceDate === undefined) return interval.date;
+    const sourceDate = dateKey(record.sourceDate);
+    if (!sourceDate) return null;
+    const dayOffset = dateStart(interval.date) - dateStart(sourceDate);
+    return dayOffset === 0 || dayOffset === dayMs ? sourceDate : null;
+  }
+
+  function readAssistants(records = [], restRecords = [], groups = []) {
+    const dates = new Set();
+    const people = new Map();
+    const error = "独立助播排班的人员、日期或时间有误，请确认源表。";
+    const invalid = () => ({ error, people: new Map(), dates: new Set() });
+
+    function register(name, id) {
+      const key = identityKey(name, textField(id));
+      if (!people.has(key)) people.set(key, { name, aliases: new Set(), shifts: [], restDays: new Set() });
+      const person = people.get(key);
+      person.aliases.add(name);
+      return person;
+    }
+
+    if (!Array.isArray(records) || !Array.isArray(restRecords)) return invalid();
+    for (const record of records) {
+      const name = textField(record?.name);
+      const interval = readInterval(record);
+      if (!name || !interval) return invalid();
+      const sourceDate = readSourceDate(record, interval);
+      if (!sourceDate) return invalid();
+      const person = register(name, record.id);
+      person.shifts.push({ ...interval, sourceDate });
+      collectDates(dates, interval);
+    }
+    for (const record of restRecords) {
+      const name = textField(record?.name);
+      const date = dateKey(record?.date);
+      if (!name || !date) return invalid();
+      register(name, record.id).restDays.add(date);
+      dates.add(date);
+    }
+    for (const group of Array.isArray(groups) ? groups : []) {
+      const title = textField(group?.name);
+      if (!title || !Array.isArray(group.members)) continue;
+      for (const member of group.members) {
+        const name = textField(member?.name);
+        if (!name) continue;
+        const person = people.get(identityKey(name, textField(member.id)));
+        if (person) person.team = title;
+      }
+    }
+    return { people, dates };
+  }
+
+  function readSchedule(data) {
+    if (!data || !["demo", "real"].includes(data.mode) || !Array.isArray(data.rooms) || !Array.isArray(data.shifts)) {
+      throw new ScheduleError("排班数据缺少房间或班次列表");
+    }
+    const rooms = [];
+    const byRoom = new Map();
+    const directory = new Map();
+    const restByDay = new Map();
+
+    function register(name, id, hasAssignment) {
+      const key = identityKey(name, id);
+      if (!directory.has(key)) {
+        directory.set(key, { key, name, aliases: new Set(), hasAssignment: false, confirmed: key.startsWith("id:") });
+      }
+      const person = directory.get(key);
+      person.aliases.add(name);
+      person.hasAssignment ||= hasAssignment;
+      return key;
+    }
+    for (const record of data.rooms) {
+      const number = textField(record?.number);
+      if (!number || byRoom.has(number)) throw new ScheduleError("房号缺失或重复，请检查排班表");
+      byRoom.set(number, []);
+      rooms.push({
+        number, name: textField(record.name), platform: textField(record.platform),
+        type: textField(record.type), floor: textField(record.floor),
+      });
+    }
+    const dates = new Set();
+    for (const record of data.shifts) {
+      const roomNumber = textField(record?.roomNumber);
+      const interval = readInterval(record);
+      const sourceDate = interval && readSourceDate(record, interval);
+      if (!byRoom.has(roomNumber) || !interval || !sourceDate) {
+        throw new ScheduleError("存在房号、日期或时间不完整的班次，请检查排班表");
+      }
+      const host = textField(record.host);
+      byRoom.get(roomNumber).push({
+        startsAt: interval.startsAt, endsAt: interval.endsAt, sourceDate, host,
+        platform: textField(record.platform), account: textField(record.account),
+        hostKey: host ? register(host, textField(record.hostId), true) : "",
+      });
+      collectDates(dates, interval);
+    }
+    for (const record of data.restDays || []) {
+      const date = dateKey(record?.date);
+      const name = textField(record?.name);
+      if (!date || !name) throw new ScheduleError("休息记录缺少日期或人员，请检查排班表");
+      if (!restByDay.has(date)) restByDay.set(date, new Set());
+      restByDay.get(date).add(register(name, textField(record.id), false));
+      dates.add(date);
+    }
+    for (const shifts of byRoom.values()) {
+      shifts.sort((first, second) => first.startsAt - second.startsAt);
+      if (shifts.some((shift, index) => index > 0 && shift.startsAt < shifts[index - 1].endsAt)) {
+        throw new ScheduleError("同一房间有重叠班次，请确认后重新生成看板");
+      }
+    }
+    const initialDate = dateKey(data.initialDate);
+    const initialTime = parseTime(data.initialTime);
+    if (data.mode === "demo" && (!initialDate || initialTime === null)) {
+      throw new ScheduleError("示例排班缺少查看日期或查看时点");
+    }
+    if (initialDate) dates.add(initialDate);
+    const initial = initialDate && initialTime !== null ? { date: initialDate, minutes: initialTime } : null;
+    const startDate = dateKey(data.coverageStart);
+    const endDate = dateKey(data.coverageEnd);
+    const coverage = startDate && endDate && startDate <= endDate ? { startDate, endDate } : null;
+    rooms.sort((first, second) => compareFloors(first.floor, second.floor) || collator.compare(first.number, second.number));
+    const assistants = readAssistants(data.assistantShifts, data.assistantRestDays, data.assistantGroups);
+    return {
+      mode: data.mode, rooms, dates: [...new Set([...dates, ...assistants.dates])].sort(), roomDates: [...dates],
+      byRoom, initial, directory, restByDay, assistants, sourceLabel: textField(data.sourceLabel),
+      assistantSourceLabel: textField(data.assistantSourceLabel), coverage,
+      hoursMonth: textField(data.hoursMonth) || startDate?.slice(0, 7),
+      hostHoursTeam: textField(data.hostHoursTeam),
+    };
+  }
+
+  function boundaryTime(minutes) {
+    if (minutes < 0) return "前日 " + clock(minutes + minutesPerDay);
+    if (minutes > minutesPerDay) return "次日 " + clock(minutes - minutesPerDay);
+    return clock(minutes);
+  }
+
+  function timeRange(shift) {
+    return boundaryTime(shift.start) + "–" + boundaryTime(shift.end);
+  }
+
+  function durationText(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    if (!hours) return remainder + " 分钟";
+    if (!remainder) return hours + " 小时";
+    return hours + " 小时 " + remainder + " 分";
+  }
+
+  function shiftStatus(shift) {
+    if (shift.end <= asOfMinutes) return "ended";
+    if (shift.start > asOfMinutes) return "upcoming";
+    return "current";
+  }
+
+  function assignmentSummary(shifts) {
+    const current = shifts.find((shift) => shiftStatus(shift) === "current");
+    const next = shifts.find((shift) => shiftStatus(shift) === "upcoming");
+    let status = "empty";
+    if (current) status = "current";
+    else if (next) status = "upcoming";
+    else if (shifts.length) status = "ended";
+    return { current, next, status };
+  }
+
+  function buildRoster() {
+    const day = dateStart(selectedDay);
+    return schedule.rooms.map((room) => {
+      const shifts = schedule.byRoom.get(room.number)
+        .filter((shift) => shift.startsAt < day + dayMs && shift.endsAt > day)
+        .map(({ startsAt, endsAt, host, platform, account, hostKey }) => ({
+          room, start: (startsAt - day) / 60000, end: (endsAt - day) / 60000, host, platform, account, hostKey,
+        }));
+      return { ...room, shifts, ...assignmentSummary(shifts) };
+    });
+  }
+
+  function buildPeople(roster) {
+    const people = new Map();
+    const resting = schedule.restByDay.get(selectedDay) || new Set();
+    const ensurePerson = (key) => {
+      if (!people.has(key)) people.set(key, { ...schedule.directory.get(key), shifts: [], rest: resting.has(key) });
+      return people.get(key);
+    };
+    for (const key of resting) ensurePerson(key);
+    for (const room of roster) {
+      for (const shift of room.shifts) {
+        if (shift.hostKey) ensurePerson(shift.hostKey).shifts.push(shift);
+      }
+    }
+    const ordered = [...people.values()].map((person) => {
+      person.shifts.sort((first, second) => first.start - second.start);
+      const summary = assignmentSummary(person.shifts);
+      const currentRooms = new Set(person.shifts.filter((shift) => shiftStatus(shift) === "current")
+        .map((shift) => shift.room.number));
+      const restConflict = person.rest && person.shifts.length > 0;
+      const simultaneous = currentRooms.size > 1 && !combinedName(person.name);
+      const previousEnd = person.shifts.reduce((latest, shift) => shift.end <= asOfMinutes
+        ? Math.max(latest, shift.end) : latest, 0);
+      const gap = !summary.current && summary.next && previousEnd > 0
+        ? { start: previousEnd, end: summary.next.start } : null;
+      const status = restConflict || simultaneous ? "conflict"
+        : person.rest ? "rest" : gap ? "gap" : summary.status;
+      return { ...person, ...summary, status, restConflict, simultaneous, gap };
+    });
+    const statusOrder = ["conflict", "current", "gap", "upcoming", "rest", "ended"];
+    return ordered.sort((first, second) =>
+      statusOrder.indexOf(first.status) - statusOrder.indexOf(second.status) ||
+      first.name.localeCompare(second.name, "zh-CN"),
+    );
+  }
+
+  const modeButtons = document.querySelectorAll(".mode-button[data-view]");
+  const panels = {
+    rooms: byId("roomsPanel"),
+    people: byId("peoplePanel"),
+    assistants: byId("assistantsPanel"),
+    handoff: byId("handoffPanel"),
+    hours: byId("hoursPanel"),
+  };
+  const timeControls = document.querySelector(".time-controls");
+  const teamSelect = byId("teamSelect");
+  const viewNav = byId("viewNav");
+  const teamPending = byId("teamPending");
+  const daySelect = byId("daySelect");
+  const asOf = byId("asOf");
+  const contextText = byId("contextText");
+  const clockMode = byId("clockMode");
+  const resetContext = byId("resetContext");
+  const floorOverview = byId("floorOverview");
+  const floorCards = byId("floorCards");
+  const overviewResult = byId("overviewResult");
+  const floorDetail = byId("floorDetail");
+  const floorTitle = byId("floorTitle");
+  const backFloors = byId("backFloors");
+  const roomUnavailable = byId("roomUnavailable");
+  const roomState = byId("roomState");
+  const roomSearch = byId("roomSearch");
+  const roomResult = byId("roomResult");
+  const roomList = byId("roomList");
+  const roomPager = byId("roomPager");
+  const peopleSearch = byId("peopleSearch");
+  const peopleStatus = byId("peopleStatus");
+  const assistantSearch = byId("assistantSearch");
+  const handoffFloor = byId("handoffFloor");
+  const handoffScope = byId("handoffScope");
+  const detailDialog = byId("detailDialog");
+  const detailClose = byId("detailClose");
+
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function button(className, text, onClick) {
+    const control = element("button", className, text);
+    control.type = "button";
+    control.addEventListener("click", onClick);
+    return control;
+  }
+
+  function chip(state, override) {
+    const node = element("span", "status-chip", override || labels[state]);
+    node.dataset.state = state;
+    return node;
+  }
+
+  function outsideCoverage() {
+    const { coverage } = schedule;
+    return coverage && (selectedDay < coverage.startDate || selectedDay > coverage.endDate);
+  }
+
+  function roomStateChip(room) {
+    return chip(room.status, outsideCoverage() && room.status === "ended" ? "已知跨日班已结束" : undefined);
+  }
+
+  function emptyState(title, message, recovery) {
+    const node = element("div", "empty-state");
+    node.append(element("strong", "", title), element("p", "", message));
+    if (recovery) node.append(button("empty-action", "清除筛选", recovery));
+    return node;
+  }
+
+  function hostName(shift) {
+    if (!shift) return "—";
+    return shift.host || "待安排";
+  }
+
+  function hostChip(shift) {
+    const node = element("span", "current-role");
+    node.dataset.role = "host";
+    node.dataset.vacant = String(!shift?.host);
+    const copy = element("span", "role-copy");
+    copy.append(element("small", "role-label", "主播"), element("strong", "role-name", hostName(shift)));
+    if (shift?.host) {
+      const avatar = element("span", "role-avatar", Array.from(shift.host)[0]);
+      avatar.setAttribute("aria-hidden", "true");
+      node.append(avatar);
+    }
+    node.append(copy);
+    return node;
+  }
+
+  function roomMetadata(room) {
+    const platform = room.platform && !room.name.includes(room.platform) ? room.platform : "";
+    return [platform, room.type].filter(Boolean).join(" · ");
+  }
+
+  function accountLabel(shift) {
+    return shift.account || shift.platform;
+  }
+
+  function roomTime(room) {
+    const period = element("span", "room-time");
+    if (room.current) {
+      const remaining = durationText(room.current.end - asOfMinutes);
+      period.append(element("strong", "", timeRange(room.current)),
+        element("small", "period-remaining", "距结束 " + remaining));
+      const account = accountLabel(room.current);
+      if (account && account !== room.name) period.append(element("small", "account-line", account));
+    } else {
+      period.append(element("small", "room-no-current", "当前无班"));
+    }
+    return period;
+  }
+
+  function nextAssignment(room, compact = false) {
+    const next = element("span", "next");
+    if (compact) next.append(element("small", "compact-label", "下一班"));
+    if (room.next) {
+      next.append(element("strong", "next-label", (compact ? "" : "下一班 ") + clock(room.next.start)));
+      const account = accountLabel(room.next);
+      if (account && account !== room.name) next.append(element("span", "next-account", account));
+      if (!compact) {
+        next.append(element("span", "next-roles", "主播 " + hostName(room.next)));
+      }
+    } else {
+      const label = outsideCoverage() ? "其余时段未覆盖" : compact ? "当日无后续" : "当日无后续班次";
+      next.append(element("span", "next-label", label));
+    }
+    return next;
+  }
+
+  function roomIdentity(room, node = element("span", "room-label")) {
+    node.append(element("span", "rid", room.number));
+    if (room.name && room.name !== room.number) node.append(element("span", "room-title", room.name));
+    const meta = roomMetadata(room);
+    if (meta) node.append(element("small", "room-meta", meta));
+    return node;
+  }
+
+  function roomRow(room) {
+    const row = element("tr");
+    row.dataset.state = room.status;
+    row.dataset.room = room.number;
+    const name = element("th");
+    name.scope = "row";
+    const trigger = button("room-label", undefined, () => openRoom(room, trigger));
+    trigger.setAttribute("aria-label", room.number + " " + (room.name || "") + "，查看房间详情");
+    const status = element("span", "room-status");
+    status.append(roomStateChip(room), roomTime(room));
+    name.append(roomIdentity(room, trigger), status);
+    const host = element("td", "people-cell");
+    host.append(hostChip(room.current));
+    const next = element("td");
+    next.append(nextAssignment(room));
+    row.append(name, host, next);
+    return row;
+  }
+
+  function roomCard(room) {
+    const trigger = button("compact", undefined, () => openRoom(room, trigger));
+    trigger.dataset.state = room.status;
+    trigger.dataset.room = room.number;
+    const head = element("span", "compact-head");
+    head.append(roomIdentity(room), roomStateChip(room));
+    const data = element("span", "compact-data");
+    data.append(hostChip(room.current), nextAssignment(room, true));
+    trigger.append(head, roomTime(room), data);
+    return trigger;
+  }
+
+  function floorLabel(floor) {
+    return !floor ? "楼层待确认" : /^\d+$/.test(floor) ? floor + " 楼" : floor;
+  }
+
+  function compareFloors(first, second) {
+    if (!first || !second) return Number(!first) - Number(!second);
+    return collator.compare(first, second);
+  }
+
+  function floorGroup(floor, rooms) {
+    const label = floorLabel(floor);
+    const section = element("section", "floor-group");
+    const table = element("table", "roster");
+    table.setAttribute("aria-label", label + "直播间排班");
+    const header = element("thead");
+    const columns = element("tr");
+    for (const heading of ["房间", "当前主播", "下次交接"]) {
+      const column = element("th", "", heading);
+      column.scope = "col";
+      columns.append(column);
+    }
+    header.append(columns);
+    const rows = element("tbody");
+    rows.append(...rooms.map(roomRow));
+    table.append(header, rows);
+
+    const cards = element("div", "mobile-rooms");
+    cards.append(...rooms.map(roomCard));
+    section.append(table, cards);
+    return section;
+  }
+
+  function floorRooms(roster, floor) {
+    return floor === "all" ? roster : roster.filter((room) => room.floor === floor);
+  }
+
+  function matchesRoom(room, searchTerms) {
+    const numberParts = /^(\d+)-(\d+)$/.exec(room.number);
+    const aliases = numberParts && room.floor ? [
+      numberParts[1] + "-" + Number(numberParts[2]),
+      `${room.floor.replace(/\s*楼$/, "")}楼${Number(numberParts[2])}号`,
+      `${room.floor.replace(/\s*楼$/, "")}楼${numberParts[2]}号`,
+    ] : [];
+    const accounts = room.shifts.flatMap((shift) => [shift.platform, shift.account]);
+    const searchable = normalizeSearch([room.number, room.number.replace("-", ""), room.name, room.platform,
+      floorLabel(room.floor), room.current?.host, room.next?.host, ...aliases, ...accounts].join(" "));
+    return searchTerms.every((term) => searchable.includes(term));
+  }
+
+  function resetRoomFilters() {
+    roomPage = 1;
+    roomState.value = "all";
+    roomSearch.value = "";
+  }
+
+  function openFloor(floor) {
+    selectedFloor = floor;
+    resetRoomFilters();
+    render();
+    floorTitle.focus();
+  }
+
+  function floorCard(floor, rooms) {
+    const card = button("floor-card", undefined, () => openFloor(floor));
+    card.dataset.floor = floor;
+    const arrow = element("span", "floor-chevron", "›");
+    arrow.setAttribute("aria-hidden", "true");
+    card.append(element("strong", "floor-name", floorLabel(floor)),
+      element("span", "floor-count", `共 ${rooms.length} 间 · ${rooms.filter((room) => room.current).length} 间当前有班`), arrow);
+    return card;
+  }
+
+  function renderFloorOverview(roster) {
+    const groups = new Map();
+    for (const room of roster) {
+      if (!groups.has(room.floor)) groups.set(room.floor, []);
+      groups.get(room.floor).push(room);
+    }
+    const result = `${roster.length} 间直播间 · ${roster.filter((room) => room.current).length} 间当前有班`;
+    if (overviewResult.textContent !== result) overviewResult.textContent = result;
+    floorCards.replaceChildren(...[...groups].map(([floor, rooms]) => floorCard(floor, rooms)));
+    roomList.replaceChildren();
+    roomPager.replaceChildren();
+    roomPager.hidden = true;
+  }
+
+  function renderRoomPager(pageCount) {
+    roomPager.hidden = pageCount <= 1;
+    roomPager.replaceChildren();
+    if (roomPager.hidden) return;
+    const addPageButton = (label, direction, step) => {
+      const control = button("pager-button", label, () => {
+        roomPage += step;
+        render();
+        floorTitle.focus({ preventScroll: true });
+        floorDetail.scrollIntoView({ block: "start" });
+      });
+      control.dataset.direction = direction;
+      control.disabled = roomPage + step < 1 || roomPage + step > pageCount;
+      return control;
+    };
+    const label = element("span", "pager-label", `第 ${roomPage} / ${pageCount} 页`);
+    roomPager.append(addPageButton("上一页", "previous", -1), label, addPageButton("下一页", "next", 1));
+  }
+
+  function renderFloorDetail(roster) {
+    floorTitle.textContent = floorLabel(selectedFloor);
+    const visibleFloor = roster.filter((room) => room.floor === selectedFloor);
+    const searchTerms = normalizeSearch(roomSearch.value).replace(/[–—−]/g, "-").split(/\s+/).filter(Boolean);
+    const results = visibleFloor.filter((room) =>
+      (roomState.value === "all" || room.status === roomState.value) && matchesRoom(room, searchTerms),
+    );
+    const pageCount = Math.ceil(results.length / roomsPerPage);
+    roomPage = Math.min(roomPage, Math.max(1, pageCount));
+    renderRoomPager(pageCount);
+    if (!results.length) {
+      roomResult.textContent = "";
+      roomList.replaceChildren(visibleFloor.length
+        ? emptyState("没有符合筛选条件的直播间", "可换个房号或主播姓名，或清除筛选。", () => {
+          resetRoomFilters();
+          render();
+          roomSearch.focus();
+        })
+        : emptyState("所选日期暂无此楼层的班次", "可返回楼层汇总或切换日期。"));
+      return;
+    }
+    const start = (roomPage - 1) * roomsPerPage;
+    const visibleRooms = results.slice(start, start + roomsPerPage);
+    const end = start + visibleRooms.length;
+    const range = start + 1 === end ? String(end) : `${start + 1}–${end}`;
+    const displayed = pageCount > 1 ? `显示第 ${range} 间，共 ${results.length} 间` : `共 ${results.length} 间`;
+    const result = `${displayed} · ${results.filter((room) => room.current).length} 间当前有班`;
+    if (roomResult.textContent !== result) roomResult.textContent = result;
+    roomList.replaceChildren(floorGroup(selectedFloor, visibleRooms));
+  }
+
+  function findFloorCard(floor) {
+    return [...floorCards.querySelectorAll(".floor-card")].find((card) => card.dataset.floor === floor);
+  }
+
+  function restoreRoomFocus(previous) {
+    if (!previous || previous.isConnected) return;
+    let replacement;
+    if (previous.matches(".floor-card")) {
+      replacement = findFloorCard(previous.dataset.floor);
+    } else if (previous.matches(".pager-button")) {
+      replacement = [...roomPager.querySelectorAll("button:not(:disabled)")]
+        .find((button) => button.dataset.direction === previous.dataset.direction)
+        || roomPager.querySelector("button:not(:disabled)") || floorTitle;
+    } else if (previous.matches(".room-label, .compact")) {
+      const roomNumber = previous.closest("[data-room]")?.dataset.room;
+      const controls = roomList.querySelectorAll(".room-label, .compact");
+      replacement = [...controls].find((control) =>
+        control.getClientRects().length && control.closest("[data-room]")?.dataset.room === roomNumber) || floorTitle;
+    } else if (previous.matches(".empty-action")) {
+      replacement = roomList.querySelector(".empty-action");
+    }
+    replacement?.focus({ preventScroll: true });
+  }
+
+  function renderRooms(roster) {
+    const focused = document.activeElement;
+    roomUnavailable.hidden = true;
+    floorOverview.hidden = selectedFloor !== null;
+    floorDetail.hidden = selectedFloor === null;
+    if (selectedFloor === null) renderFloorOverview(roster);
+    else renderFloorDetail(roster);
+    restoreRoomFocus(focused);
+  }
+
+  function renderRoomUnavailable(title, hint) {
+    floorOverview.hidden = floorDetail.hidden = true;
+    floorCards.replaceChildren();
+    roomList.replaceChildren();
+    roomPager.replaceChildren();
+    roomPager.hidden = true;
+    roomUnavailable.hidden = false;
+    roomUnavailable.replaceChildren(emptyState(title, hint));
+  }
+
+  function assignmentItem(shift, person, roomsByNumber) {
+    const state = shiftStatus(shift);
+    const description = state === "current" ? "当前班次"
+      : shift.start === person.next?.start ? "下一班" : state === "upcoming" ? "后续班次" : "已结束";
+    const row = element("li", "person-assignment");
+    row.dataset.state = state;
+    const when = element("span", "assignment-when");
+    when.append(element("span", "assignment-label", description), element("span", "assignment-time", timeRange(shift)));
+    const place = element("span", "assignment-room");
+    const room = roomsByNumber.get(shift.room.number);
+    const roomLink = button("assignment-room-link", room.number + " · " + room.name,
+      () => openRoom(room, roomLink));
+    place.append(roomLink);
+    const account = accountLabel(shift) || room.platform;
+    if (account) place.append(element("small", "assignment-platform", account));
+    row.append(when, place);
+    return row;
+  }
+
+  function personnelNote(state, label, time, text) {
+    const row = element("li", "person-assignment");
+    row.dataset.state = state;
+    const when = element("span", "assignment-when");
+    when.append(element("span", "assignment-label", label), element("span", "assignment-time", time));
+    row.append(when, element("span", "assignment-note", text));
+    return row;
+  }
+
+  function personCard(person, roomsByNumber) {
+    const card = element("article", "person-card");
+    card.dataset.state = person.status;
+    const head = element("header", "person-card-head");
+    const identity = element("div", "person-card-identity");
+    identity.append(element("h3", "person-name", person.name));
+    if (combinedName(person.name) || !person.hasAssignment) {
+      identity.append(element("span", "role-tag", combinedName(person.name) ? "源表合写" : "休息记录"));
+    }
+    const overlapLabel = person.confirmed ? "同时排在多间" : "同名多间同时排班";
+    const stateLabel = person.restConflict ? "休息与排班冲突"
+      : person.simultaneous ? overlapLabel
+      : personLabels[person.status];
+    head.append(identity, chip(person.status, stateLabel));
+    const assignments = element("ol", "person-assignments");
+    if (person.rest) {
+      assignments.append(personnelNote("rest", "源表标记：全天休息", "全天",
+        person.restConflict ? "同一天也列有班次，两项均保留待核对。" : "来自排班表的明确休息标记。"));
+    }
+    for (const shift of person.shifts) {
+      if (person.gap && shift === person.next) {
+        assignments.append(personnelNote("gap", "班间空档", timeRange(person.gap), "这两段班次之间未排班。"));
+      }
+      assignments.append(assignmentItem(shift, person, roomsByNumber));
+    }
+    card.append(head);
+    if (person.restConflict && person.simultaneous) {
+      card.append(element("p", "person-conflict", overlapLabel + "，请同时核对地点和休息标记。"));
+    } else if (person.simultaneous && !person.confirmed) {
+      card.append(element("p", "person-conflict", "源表同名记录保留，是否同一人待确认。"));
+    }
+    card.append(assignments);
+    return card;
+  }
+
+  function normalizeSearch(value) {
+    return value.normalize("NFKC").trim().toLowerCase();
+  }
+
+  function renderPeople(roster) {
+    const query = normalizeSearch(peopleSearch.value);
+    const statusFilter = peopleStatus?.value || "all";
+    const people = buildPeople(roster).filter((person) => {
+      const matchesStatus = statusFilter === "all" || person.status === statusFilter;
+      return matchesStatus && [...person.aliases].some((name) => normalizeSearch(name).includes(query));
+    });
+    const list = byId("peopleList");
+    byId("peopleResult").textContent = `找到 ${people.length} 条人员记录`;
+    const note = byId("attendanceNote");
+    if (note) {
+      const attendance = schedule.mode === "real" ? "实际到岗未确认。" : "";
+      const content = "按试点房间的计划排班和原表休息名单计算。" + attendance;
+      if (note.textContent !== content) note.textContent = content;
+      note.hidden = false;
+    }
+    if (people.length) {
+      const grid = element("div", "people-grid");
+      const roomsByNumber = new Map(roster.map((room) => [room.number, room]));
+      grid.append(...people.map((person) => personCard(person, roomsByNumber)));
+      list.replaceChildren(grid);
+      return;
+    }
+    list.replaceChildren(emptyState("未找到符合条件的主播", "试试换个姓名，或调整状态筛选。", () => {
+      peopleSearch.value = "";
+      if (peopleStatus) peopleStatus.value = "all";
+      render();
+      peopleSearch.focus();
+    }));
+  }
+
+  function renderAssistants() {
+    const list = byId("assistantList");
+    const result = byId("assistantResult");
+    const filterBar = assistantSearch.closest(".assistant-filter-bar");
+    const { assistants } = schedule;
+    const error = dataError || assistants?.error;
+    if (error || !assistants?.people.size) {
+      assistantSearch.disabled = true;
+      filterBar.hidden = true;
+      result.textContent = "";
+      list.replaceChildren(error
+        ? emptyState("独立助播排班待核对", error)
+        : emptyState("源表未提供独立助播排班", "助播表只需提供姓名、日期和工作起止时间。"));
+      return;
+    }
+
+    const day = dateStart(selectedDay);
+    const moment = day + asOfMinutes * 60000;
+    const query = normalizeSearch(assistantSearch.value);
+    const people = [...assistants.people.values()].flatMap((person) => {
+      const shifts = person.shifts.filter((shift) => shift.startsAt < day + dayMs && shift.endsAt > day);
+      const rest = person.restDays.has(selectedDay);
+      if (!shifts.length && !rest) return [];
+      return [{
+        ...person, working: shifts.some((shift) => shift.startsAt <= moment && moment < shift.endsAt),
+        conflict: rest && person.shifts.some((shift) => shift.sourceDate === selectedDay),
+      }];
+    });
+    assistantSearch.disabled = !people.length;
+    filterBar.hidden = !people.length;
+    if (!people.length) {
+      result.textContent = "";
+      list.replaceChildren(emptyState("当日未读到助播排班记录", "可切换日期查看已有的独立排班。"));
+      return;
+    }
+
+    const matches = people.filter((person) => [...person.aliases].some((name) => normalizeSearch(name).includes(query)))
+      .sort((first, second) => Number(second.working) - Number(first.working) || collator.compare(first.name, second.name));
+    result.textContent = `显示 ${matches.length} 人 · ${matches.filter((person) => person.working).length} 人有工作`;
+    if (!matches.length) {
+      list.replaceChildren(emptyState("未找到符合条件的助播", "可换一个姓名再查。", () => {
+        assistantSearch.value = "";
+        renderAssistants();
+        assistantSearch.focus();
+      }));
+      return;
+    }
+
+    const grids = new Map();
+    const showGroups = [...assistants.people.values()].some((person) => person.team);
+    for (const person of matches) {
+      const team = person.team || "";
+      if (!grids.has(team)) grids.set(team, element("div", "assistants-grid"));
+      const card = element("article", "assistant-card");
+      const state = person.working ? "working" : "idle";
+      card.dataset.state = state;
+      card.append(element(showGroups ? "h4" : "h3", "assistant-name", person.name),
+        chip(state, person.working ? "有工作" : "当前无工作"));
+      grids.get(team).append(card);
+    }
+    const sections = [...grids].sort(([first], [second]) => Number(!first) - Number(!second) || collator.compare(first, second))
+      .map(([team, grid]) => {
+        if (!showGroups) return grid;
+        const section = element("section", "assistant-team");
+        section.append(element("h3", "assistant-team-title", team || "未分组记录"), grid);
+        return section;
+      });
+    const conflicts = matches.filter((person) => person.conflict);
+    if (conflicts.length) {
+      const names = conflicts.map((person) => person.name).join("、");
+      const note = element("p", "attendance-note assistant-conflict-note",
+        names + "在源表同日同时列有休息与工作时段。请核对排班，卡片按工作时段显示。");
+      note.setAttribute("role", "status");
+      list.replaceChildren(note, ...sections);
+    } else {
+      list.replaceChildren(...sections);
+    }
+  }
+
+  function monthWindow(month) {
+    const firstDay = dateKey(month + "-01");
+    if (!firstDay) return null;
+    const startsAt = dateStart(firstDay);
+    const next = new Date(startsAt);
+    next.setUTCMonth(next.getUTCMonth() + 1);
+    const endsAt = next.getTime();
+    const [year, monthNumber] = month.split("-").map(Number);
+    const lastDay = new Date(endsAt - dayMs).getUTCDate();
+    return { startsAt, endsAt, year, monthNumber, lastDay };
+  }
+
+  function monthHasDate(bounds, date) {
+    const stamp = dateStart(date);
+    return stamp >= bounds.startsAt && stamp < bounds.endsAt;
+  }
+
+  function unionMinutes(shifts) {
+    let covered = 0;
+    let previousEnd = -Infinity;
+    for (const shift of [...shifts].sort((first, second) => first.startsAt - second.startsAt)) {
+      const start = Math.max(shift.startsAt, previousEnd);
+      const end = shift.endsAt;
+      if (end > start) {
+        covered += end - start;
+        previousEnd = end;
+      }
+    }
+    return covered / 60000;
+  }
+
+  function hostHours(bounds) {
+    const people = new Map();
+    const keysByName = new Map();
+    for (const person of schedule.directory.values()) {
+      if (combinedName(person.name)) continue;
+      for (const name of person.aliases) {
+        if (!keysByName.has(name)) keysByName.set(name, new Set());
+        keysByName.get(name).add(person.key);
+      }
+    }
+
+    function register(key, name) {
+      if (!people.has(key)) {
+        people.set(key, { name: schedule.directory.get(key)?.name || name, shifts: [] });
+      }
+      return people.get(key);
+    }
+
+    for (const shifts of schedule.byRoom.values()) {
+      for (const shift of shifts) {
+        if (!monthHasDate(bounds, shift.sourceDate)) continue;
+        const names = new Set(shift.host.split(/[/／、]/).map((name) => name.trim()).filter(Boolean));
+        for (const name of names) {
+          const keys = keysByName.get(name);
+          const key = shift.host === name ? shift.hostKey
+            : keys?.size === 1 ? keys.values().next().value : identityKey(name, "");
+          register(key, name).shifts.push(shift);
+        }
+      }
+    }
+    for (const [date, resting] of schedule.restByDay) {
+      if (!monthHasDate(bounds, date)) continue;
+      for (const key of resting) register(key, schedule.directory.get(key).name);
+    }
+    return [...people.values()].map((person) => ({ name: person.name, minutes: unionMinutes(person.shifts) }));
+  }
+
+  function assistantHours(bounds) {
+    return [...schedule.assistants.people.values()].flatMap((person) => {
+      const shifts = person.shifts.filter((shift) => monthHasDate(bounds, shift.sourceDate));
+      const minutes = unionMinutes(shifts);
+      const rest = [...person.restDays].some((date) => monthHasDate(bounds, date));
+      return minutes || rest ? [{ name: person.name, team: person.team, minutes }] : [];
+    });
+  }
+
+  function hoursText(minutes) {
+    return minutes ? durationText(minutes) : "0 小时";
+  }
+
+  function hoursRoleSection(team, role, people) {
+    const label = role === "hosts" ? "主播" : "助播";
+    const section = element("section", "hours-role");
+    section.dataset.role = role;
+    const heading = element("div", "hours-role-head");
+    const totalMinutes = people.reduce((sum, person) => sum + person.minutes, 0);
+    const total = element("p", "hours-role-total", `${people.length} 人 · ${hoursText(totalMinutes)}`);
+    total.dataset.minutes = String(totalMinutes);
+    heading.append(element("h4", "hours-role-title", label), total);
+    const table = element("table", "hours-table");
+    table.setAttribute("aria-label", team + label + "月度排班工时");
+    const header = element("thead");
+    const columns = element("tr");
+    for (const title of ["姓名", "排班工时"]) {
+      const column = element("th", "", title);
+      column.scope = "col";
+      columns.append(column);
+    }
+    header.append(columns);
+    const body = element("tbody");
+    for (const person of people.sort((first, second) => collator.compare(first.name, second.name))) {
+      const row = element("tr");
+      const name = element("th", "hours-name", person.name);
+      name.scope = "row";
+      row.append(name);
+      const time = element("td", "hours-value", hoursText(person.minutes));
+      time.dataset.minutes = String(person.minutes);
+      row.append(time);
+      body.append(row);
+    }
+    table.append(header, body);
+    section.append(heading, table);
+    return section;
+  }
+
+  function renderHours() {
+    if (hoursRendered) return;
+    hoursRendered = true;
+    const list = byId("hoursList");
+    const bounds = monthWindow(schedule.hoursMonth);
+    if (dataError || !bounds) {
+      list.append(dataError
+        ? emptyState("排班数据待核对", dataError)
+        : emptyState("工时统计月份待确认", "确认统计月份后可查看各人员的累计排班工时。"));
+      return;
+    }
+    byId("hoursPeriod").textContent =
+      `${bounds.year} 年 ${bounds.monthNumber} 月 1 日–${bounds.lastDay} 日 · 按源表日期列`;
+    byId("hoursNote").textContent =
+      "月末夜班完整计入。同格多名主播各计完整时长，同一人同角色的重叠时段只计一次。";
+
+    const teams = new Map();
+    function teamFor(name) {
+      const label = name || "未分组";
+      if (!teams.has(label)) teams.set(label, { hosts: [], assistants: [] });
+      return teams.get(label);
+    }
+
+    const hosts = hostHours(bounds);
+    if (hosts.length) teamFor(schedule.hostHoursTeam || selectedTeam.name).hosts = hosts;
+    for (const person of assistantHours(bounds)) teamFor(person.team).assistants.push(person);
+
+    for (const [team, roles] of teams) {
+      const section = element("section", "hours-team");
+      const grid = element("div", "hours-role-grid");
+      for (const [role, people] of Object.entries(roles)) {
+        if (people.length) grid.append(hoursRoleSection(team, role, people));
+      }
+      section.append(element("h3", "hours-team-title", team), grid);
+      list.append(section);
+    }
+
+    if (schedule.assistants.error) list.append(emptyState("助播工时待核对", schedule.assistants.error));
+    else if (!teams.size) list.append(emptyState("本月暂无排班工时", "请确认本月的主播或助播排班。"));
+  }
+
+  function shiftNode(shift, next) {
+    const state = shift ? shiftStatus(shift) : "empty";
+    const node = element("li", "shift-node");
+    node.dataset.state = state;
+    const time = element("span", "shift-time", shift ? timeRange(shift) : "查看时点");
+    const description = !shift ? "当前无班" : state === "current" ? "当前班次"
+      : shift === next ? "下一班" : state === "upcoming" ? "后续班次" : "已结束";
+    const head = element("div", "shift-head");
+    head.append(time, chip(state, description));
+    node.append(head);
+    if (shift) {
+      const account = accountLabel(shift);
+      if (account) node.append(element("div", "shift-account", account));
+      const people = element("div", "shift-roles");
+      const roleLine = element("span", "shift-role");
+      roleLine.append(element("span", "role-label", "主播"), element("strong", "role-name", hostName(shift)));
+      people.append(roleLine);
+      node.append(people);
+    } else {
+      node.append(element("p", "shift-caption", "该时段没有排班"));
+    }
+    return node;
+  }
+
+  function shiftTrack(room, shifts) {
+    const track = element("ol", "shift-track");
+    for (const [index, shift] of shifts.entries()) {
+      const previous = shifts[index - 1];
+      if (previous && shift && previous.end < shift.start) {
+        const gap = element("li", "shift-gap", `空档 ${boundaryTime(previous.end)}–${boundaryTime(shift.start)}`);
+        track.append(gap);
+      }
+      track.append(shiftNode(shift, room.next));
+    }
+    return track;
+  }
+
+  function handoffRoom(room, showNext) {
+    const article = element("article", "handoff-room");
+    article.dataset.room = room.number;
+    const header = button("handoff-head", undefined, () => openRoom(room, header));
+    const title = element("span", "handoff-identity");
+    title.append(element("span", "room-id", room.number));
+    if (room.name && room.name !== room.number) title.append(element("span", "room-heading", room.name));
+    if (room.platform) title.append(element("span", "room-meta", room.platform));
+    header.append(title, element("span", "detail-link", "房间详情"));
+    article.append(header, shiftTrack(room, showNext ? [room.current, room.next] : room.shifts));
+    return article;
+  }
+
+  function renderHandoff(roster) {
+    const showNext = handoffScope.value === "next";
+    const available = floorRooms(roster, handoffFloor.value);
+    const selected = showNext
+      ? available.filter((room) => room.next).sort((left, right) => left.next.start - right.next.start)
+      : available.filter((room) => room.shifts.length);
+    byId("handoffResult").textContent = showNext
+      ? `${selected.length} 间有后续班次 · 按下一班时间排序`
+      : `${selected.length} 间当天有班 · 按房号排序`;
+    const list = byId("handoffList");
+    if (selected.length) {
+      list.replaceChildren(...selected.map((room) => handoffRoom(room, showNext)));
+      return;
+    }
+    list.replaceChildren(emptyState(
+      showNext ? "所选楼层没有后续班次" : "所选楼层当天暂无排班",
+      showNext ? "切换为全天班次，仍可回看当天排班。" : "试试选择其他楼层或日期。",
+    ));
+  }
+
+  function openRoom(room, trigger) {
+    dialogTrigger = trigger;
+    detailRoomNumber = room.number;
+    updateRoomDialog(room);
+    detailDialog.showModal();
+    detailClose.focus();
+  }
+
+  function updateRoomDialog(room) {
+    byId("detailTitle").textContent = [room.number, room.name !== room.number ? room.name : ""].filter(Boolean).join(" ");
+    byId("detailMeta").textContent = [dayLabel(selectedDay, true), room.platform, "查看时点 " + clock(asOfMinutes)]
+      .filter(Boolean).join(" · ");
+    byId("detailContent").replaceChildren(room.shifts.length
+      ? shiftTrack(room, room.shifts)
+      : emptyState("当天暂无排班", "可切换日期查看其他天的安排。"));
+  }
+
+  function render() {
+    if (isPendingTeam()) return;
+    const context = dayLabel(selectedDay, true) + " / " + clock(asOfMinutes) + (live ? " · 北京时间" : "");
+    if (contextText.textContent !== context) contextText.textContent = context;
+    const mode = live ? "北京时间 · 自动更新" : schedule.mode === "demo" ? "示例时点" : "北京时间 · 手动查看";
+    if (clockMode.textContent !== mode) clockMode.textContent = mode;
+    clockMode.dataset.live = String(live);
+    updateSourceNote();
+    if (selectedView === "hours") {
+      renderHours();
+      return;
+    }
+    if (selectedView === "assistants") {
+      renderAssistants();
+      return;
+    }
+    if (dataError || !schedule.rooms.length || !schedule.roomDates.includes(selectedDay)) {
+      const title = dataError || (!schedule.rooms.length ? "源表暂无可显示的房间"
+        : outsideCoverage() ? "排班表未覆盖此日期" : "所选日期暂无源表班次");
+      const hint = dataError ? "请检查源表并重新生成看板。" : "可切换查看日期，或请排班负责人确认。";
+      if (selectedView === "rooms") renderRoomUnavailable(title, hint);
+      else {
+        const prefix = selectedView === "people" ? "people" : "handoff";
+        byId(prefix + "List").replaceChildren(emptyState(title, hint));
+        byId(prefix + "Result").textContent = "";
+      }
+      return;
+    }
+    const knownRoster = buildRoster();
+    const roster = outsideCoverage() ? knownRoster.filter((room) => room.shifts.length) : knownRoster;
+    if (selectedView === "rooms") renderRooms(roster);
+    else if (selectedView === "people") renderPeople(roster);
+    else renderHandoff(roster);
+    if (detailDialog.open && detailRoomNumber) {
+      const openRecord = roster.find((room) => room.number === detailRoomNumber);
+      if (openRecord) updateRoomDialog(openRecord);
+    }
+  }
+
+  function setView(view) {
+    selectedView = view;
+    const pending = isPendingTeam();
+    timeControls.hidden = pending || view === "hours";
+    viewNav.hidden = pending;
+    teamPending.hidden = !pending;
+    if (view === "rooms") {
+      selectedFloor = null;
+      resetRoomFilters();
+    }
+    for (const [key, panel] of Object.entries(panels)) panel.hidden = pending || key !== view;
+    for (const control of modeButtons) {
+      const active = control.dataset.view === view;
+      control.classList.toggle("is-active", active);
+      control.setAttribute("aria-pressed", String(active));
+    }
+    if (pending) {
+      teamPending.replaceChildren(emptyState(selectedTeam.name + "待导入排班",
+        "导入排班表后可查看房间、人员状态和工时。"));
+      byId("sourceNote").hidden = true;
+    } else {
+      teamPending.replaceChildren();
+      render();
+    }
+  }
+
+  function setDateOptions() {
+    const items = [...new Set([...schedule.dates, selectedDay])].sort();
+    daySelect.replaceChildren(...items.map((date) => {
+      const weekday = "日一二三四五六"[new Date(dateStart(date)).getUTCDay()];
+      return new Option(date.replaceAll("-", "/") + " 周" + weekday, date);
+    }));
+    daySelect.value = selectedDay;
+  }
+
+  function setFloorOptions() {
+    const floors = [...new Set(schedule.rooms.map((room) => room.floor))].sort(compareFloors);
+    handoffFloor.replaceChildren(new Option("全部楼层", "all"), ...floors.map((floor) => new Option(floorLabel(floor), floor)));
+  }
+
+  function suspendClock() {
+    live = false;
+    window.clearTimeout(timer);
+  }
+
+  function refreshClock() {
+    if (!live) return;
+    window.clearTimeout(timer);
+    const now = nowInShanghai();
+    if (now.date !== selectedDay || now.minutes !== asOfMinutes) {
+      if (now.date !== selectedDay) {
+        selectedDay = now.date;
+        setDateOptions();
+      }
+      asOfMinutes = now.minutes;
+      asOf.value = clock(asOfMinutes);
+      render();
+    }
+    timer = window.setTimeout(refreshClock, 60000 - Date.now() % 60000 + 10);
+  }
+
+  function setClockContext() {
+    live = schedule.mode === "real";
+    ({ date: selectedDay, minutes: asOfMinutes } = live ? nowInShanghai() : schedule.initial || nowInShanghai());
+    setDateOptions();
+    asOf.value = clock(asOfMinutes);
+  }
+
+  function resetTime() {
+    setClockContext();
+    render();
+    refreshClock();
+  }
+
+  function switchTeam() {
+    const next = teams.find((team) => team.id === teamSelect.value);
+    if (!next || next === selectedTeam) return;
+    window.clearTimeout(timer);
+    selectedTeam = next;
+    loadTeamSchedule();
+    if (detailDialog.open) detailDialog.close();
+    selectedFloor = null;
+    resetRoomFilters();
+    peopleSearch.value = "";
+    peopleStatus.value = "all";
+    assistantSearch.value = "";
+    handoffScope.value = "next";
+    hoursRendered = false;
+    byId("hoursList").replaceChildren();
+    byId("hoursPeriod").textContent = "";
+    byId("hoursNote").textContent = "";
+    setClockContext();
+    setFloorOptions();
+    describeSource();
+    setView(selectedView);
+    refreshClock();
+  }
+
+  function describeSource() {
+    const badge = byId("sourceBadge");
+    if (badge) {
+      badge.dataset.source = isPendingTeam() ? "pending" : dataError ? "error" : schedule.mode;
+      const badgeLabels = { pending: "待导入排班", error: "排班数据待检查", demo: "排班试点 · 示例数据", real: "排班试点 · 源表数据" };
+      badge.textContent = badgeLabels[badge.dataset.source];
+    }
+    resetContext.textContent = schedule.mode === "real" ? "回到当前" : "回到示例时点";
+  }
+
+  function updateSourceNote() {
+    const note = byId("sourceNote");
+    if (!note) return;
+    note.hidden = selectedView === "assistants" && !schedule.assistants?.people.size;
+    if (note.hidden) return;
+    if (selectedView === "assistants") {
+      const source = schedule.assistantSourceLabel ? "来源 " + schedule.assistantSourceLabel + "。" : "";
+      const content = source + "按北京时间查看独立排班的工作时段和明确休息记录。";
+      if (note.textContent !== content) note.textContent = content;
+      return;
+    }
+    if (selectedView === "hours") {
+      const hostSource = schedule.sourceLabel ? "主播来源 " + schedule.sourceLabel + "。" : "";
+      const assistantSource = schedule.assistantSourceLabel ? "助播来源 " + schedule.assistantSourceLabel + "。" : "";
+      const content = hostSource + assistantSource;
+      if (note.textContent !== content) note.textContent = content;
+      return;
+    }
+    const summary = schedule.mode === "demo" ? "页面使用示例排班演示。"
+      : schedule.mode === "real" ? "页面使用导入的计划排班。" : "未读取有效的排班数据。";
+    const source = schedule.sourceLabel ? "来源 " + schedule.sourceLabel + "。" : "";
+    const coverage = outsideCoverage() ? "排班表未覆盖完整日期，仅显示已知跨日班次。" : "";
+    const content = source + summary + coverage + "实际到岗以现场为准。";
+    if (note.textContent !== content) note.textContent = content;
+  }
+
+  teamSelect.addEventListener("change", switchTeam);
+  for (const control of modeButtons) control.addEventListener("click", () => setView(control.dataset.view));
+  backFloors.addEventListener("click", () => {
+    const previousFloor = selectedFloor;
+    setView("rooms");
+    findFloorCard(previousFloor)?.focus();
+  });
+  daySelect.addEventListener("change", () => {
+    if (!dateKey(daySelect.value)) return;
+    suspendClock();
+    selectedDay = daySelect.value;
+    render();
+  });
+  function updateAsOf() {
+    const nextTime = parseTime(asOf.value);
+    if (nextTime === null) return;
+    if (nextTime !== asOfMinutes) {
+      suspendClock();
+      asOfMinutes = nextTime;
+      render();
+    }
+  }
+  asOf.addEventListener("input", updateAsOf);
+  asOf.addEventListener("change", () => {
+    if (!asOf.value) asOf.value = clock(asOfMinutes);
+    else updateAsOf();
+  });
+  resetContext.addEventListener("click", resetTime);
+  for (const control of [handoffFloor, handoffScope]) {
+    control.addEventListener("change", render);
+  }
+  function filterRooms() {
+    roomPage = 1;
+    render();
+  }
+  roomSearch.addEventListener("input", filterRooms);
+  roomState.addEventListener("change", filterRooms);
+  peopleStatus?.addEventListener("change", render);
+  for (const search of [peopleSearch, assistantSearch]) search.addEventListener("input", render);
+  detailClose.addEventListener("click", () => detailDialog.close());
+  detailDialog.addEventListener("close", () => {
+    if (dialogTrigger?.isConnected) dialogTrigger.focus();
+    else {
+      const replacement = Array.from(panels[selectedView].querySelectorAll("[data-room]")).find((row) =>
+        row.dataset.room === detailRoomNumber && row.getClientRects().length,
+      );
+      (replacement?.matches("button") ? replacement : replacement?.querySelector("button"))?.focus();
+    }
+    detailRoomNumber = undefined;
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshClock();
+  });
+  window.addEventListener("focus", refreshClock);
+  window.addEventListener("pageshow", refreshClock);
+
+  teamSelect.replaceChildren(...teams.map((team) =>
+    new Option(team.pending ? team.name + "（待导入）" : team.name, team.id),
+  ));
+  teamSelect.disabled = teams.length < 2;
+  setFloorOptions();
+  describeSource();
+  setClockContext();
+  setView("rooms");
+  refreshClock();
+})();
+</script>
+</body>
+</html>
