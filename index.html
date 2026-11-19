@@ -127,6 +127,7 @@ h1, h2, h3, p { margin: 0; }
   font-weight: 690;
 }
 .team-field span { flex: none; }
+.team-coverage { margin-top: 5px; color: var(--muted); font-size: 12px; }
 .team-field select {
   min-width: 0;
   max-width: 100%;
@@ -378,6 +379,8 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .hours-team, .hours-note { max-width: 955px; }
+.hours-scope + .hours-scope { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.hours-scope-title { margin-bottom: 9px; color: var(--muted); font-size: 13px; font-weight: 720; }
 .hours-team + .hours-team {
   margin-top: 16px;
   padding-top: 13px;
@@ -851,6 +854,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
           <span>排班团队</span>
           <select id="teamSelect"></select>
         </label>
+        <p id="teamCoverage" class="team-coverage" role="status" hidden></p>
       </div>
       <div class="time-controls">
         <span class="time-mode" id="clockMode"></span>
@@ -1002,6 +1006,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   });
 
+  const allTeams = { id: "__all-teams__", name: "全部团队" };
   let teams = [];
   let selectedTeam;
   let schedule = unavailableSchedule();
@@ -1098,7 +1103,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     return data.teams.map((record) => {
       const id = textField(record?.id);
       const name = textField(record?.name);
-      if (!id || !name || ids.has(id)) throw new ScheduleError("团队名称或编号有误");
+      if (!id || !name || id === allTeams.id || ids.has(id)) throw new ScheduleError("团队名称或编号有误");
       ids.add(id);
       const floorValues = Array.isArray(record.plannedFloors) ? record.plannedFloors : [];
       const plannedFloors = [...new Set(floorValues.map(textField).filter((floor) => /^\d+$/.test(floor)))].sort(compareFloors);
@@ -1110,12 +1115,66 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     return selectedTeam?.pending === true;
   }
 
+  function aggregateSchedules() {
+    const sources = teams.filter((team) => !team.pending)
+      .map(({ id, name, schedule: data }) => ({ id, name, schedule: readSchedule(data) }));
+    if (!sources.length) throw new ScheduleError("暂无已导入排班的团队");
+    const result = unavailableSchedule();
+    const dates = new Set();
+    const roomDates = new Set();
+    const restByDay = new Map();
+    const directory = new Map();
+    const assistants = { people: new Map(), dates: new Set() };
+    const showTeam = sources.length > 1;
+    for (const team of sources) {
+      const source = team.schedule;
+      const teamName = showTeam ? team.name : "";
+      const scopedKey = (key) => JSON.stringify([team.id, key]);
+      const scope = { dates: new Set(source.roomDates), coverage: source.coverage };
+      for (const room of source.rooms) {
+        const number = scopedKey(room.number);
+        result.rooms.push({ ...room, number, sourceNumber: room.number, teamName, scope });
+        result.byRoom.set(number, source.byRoom.get(room.number).map((shift) => ({
+          ...shift, hostKey: shift.hostKey ? scopedKey(shift.hostKey) : "",
+        })));
+      }
+      for (const [key, person] of source.directory) {
+        const scoped = scopedKey(key);
+        directory.set(scoped, { ...person, key: scoped, teamName });
+      }
+      for (const [date, people] of source.restByDay) {
+        if (!restByDay.has(date)) restByDay.set(date, new Set());
+        for (const key of people) restByDay.get(date).add(scopedKey(key));
+      }
+      for (const [key, person] of source.assistants.people) {
+        const group = showTeam ? [team.name, person.team === team.name ? "" : person.team].filter(Boolean).join(" · ") : person.team;
+        assistants.people.set(scopedKey(key), { ...person, team: group });
+      }
+      for (const date of source.dates) dates.add(date);
+      for (const date of source.roomDates) roomDates.add(date);
+      for (const date of source.assistants.dates) assistants.dates.add(date);
+    }
+    result.rooms.sort((a, b) => compareFloors(a.floor, b.floor)
+      || collator.compare(a.displayNumber, b.displayNumber) || collator.compare(a.teamName, b.teamName));
+    const first = sources[0].schedule;
+    if (!assistants.people.size) {
+      assistants.error = sources.find(({ schedule }) => schedule.assistants.error)?.schedule.assistants.error;
+    }
+    return {
+      ...result, sources, directory, restByDay, assistants, dates: [...dates].sort(), roomDates: [...roomDates],
+      mode: sources.some(({ schedule }) => schedule.mode === "real") ? "real" : "demo", initial: first.initial,
+      coverage: showTeam ? null : first.coverage,
+      sourceLabel: showTeam ? "各已导入团队排班" : first.sourceLabel,
+      assistantSourceLabel: showTeam ? "各已导入团队助播排班" : first.assistantSourceLabel,
+    };
+  }
+
   function loadTeamSchedule() {
     dataError = undefined;
     schedule = unavailableSchedule();
     if (isPendingTeam()) return;
     try {
-      schedule = readSchedule(selectedTeam.schedule);
+      schedule = selectedTeam === allTeams ? aggregateSchedules() : readSchedule(selectedTeam.schedule);
     } catch (error) {
       dataError = error instanceof ScheduleError ? error.message : "排班数据格式有误";
     }
@@ -1309,13 +1368,15 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
 
   function buildRoster() {
     const day = dateStart(selectedDay);
-    return schedule.rooms.map((room) => {
+    return schedule.rooms.flatMap((room) => {
       const shifts = schedule.byRoom.get(room.number)
         .filter((shift) => shift.startsAt < day + dayMs && shift.endsAt > day)
         .map(({ startsAt, endsAt, host, platform, account, hostKey }) => ({
           room, start: (startsAt - day) / 60000, end: (endsAt - day) / 60000, host, platform, account, hostKey,
         }));
-      return { ...room, shifts, ...assignmentSummary(shifts) };
+      if (room.scope && !shifts.length &&
+          (!room.scope.dates.has(selectedDay) || outsideCoverage(room.scope.coverage))) return [];
+      return [{ ...room, shifts, ...assignmentSummary(shifts) }];
     });
   }
 
@@ -1364,6 +1425,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   };
   const timeControls = document.querySelector(".time-controls");
   const teamSelect = byId("teamSelect");
+  const teamCoverage = byId("teamCoverage");
   const viewNav = byId("viewNav");
   const teamPending = byId("teamPending");
   const daySelect = byId("daySelect");
@@ -1414,13 +1476,12 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     return node;
   }
 
-  function outsideCoverage() {
-    const { coverage } = schedule;
+  function outsideCoverage(coverage = schedule.coverage) {
     return coverage && (selectedDay < coverage.startDate || selectedDay > coverage.endDate);
   }
 
   function roomStateChip(room) {
-    return chip(room.status, outsideCoverage() && room.status === "ended" ? "已知跨日班已结束" : undefined);
+    return chip(room.status, outsideCoverage(room.scope?.coverage) && room.status === "ended" ? "已知跨日班已结束" : undefined);
   }
 
   function emptyState(title, message, recovery) {
@@ -1453,7 +1514,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
 
   function roomMetadata(room) {
     const platform = room.platform && !room.name.includes(room.platform) ? room.platform : "";
-    return [platform, room.type].filter(Boolean).join(" · ");
+    return [room.teamName, platform, room.type].filter(Boolean).join(" · ");
   }
 
   function accountLabel(shift) {
@@ -1485,7 +1546,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
         next.append(element("span", "next-roles", "主播 " + hostName(room.next)));
       }
     } else {
-      const label = outsideCoverage() ? "其余时段未覆盖" : compact ? "当日无后续" : "当日无后续班次";
+      const label = outsideCoverage(room.scope?.coverage) ? "其余时段未覆盖" : compact ? "当日无后续" : "当日无后续班次";
       next.append(element("span", "next-label", label));
     }
     return next;
@@ -1577,7 +1638,8 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   }
 
   function matchesRoom(room, searchTerms) {
-    const numberParts = /^(\d+)-(\d+)$/.exec(room.number);
+    const sourceNumber = room.sourceNumber || room.number;
+    const numberParts = /^(\d+)-(\d+)$/.exec(sourceNumber);
     const aliases = numberParts && room.floor ? [
       numberParts[1] + "-" + Number(numberParts[2]),
       `${room.floor.replace(/\s*楼$/, "")}楼${Number(numberParts[2])}号`,
@@ -1585,8 +1647,8 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     ] : [];
     const accounts = room.shifts.flatMap((shift) => [shift.platform, shift.account]);
     const displayLocation = room.floor ? floorLabel(room.floor).replaceAll(" ", "") + room.displayNumber : "";
-    const searchable = normalizeSearch([room.number, room.number.replace("-", ""), room.displayNumber,
-      displayLocation, room.name, room.platform,
+    const searchable = normalizeSearch([sourceNumber, sourceNumber.replace("-", ""), room.displayNumber,
+      displayLocation, room.name, room.platform, room.teamName,
       floorLabel(room.floor), room.current?.host, room.next?.host, ...aliases, ...accounts].join(" "));
     return searchTerms.every((term) => searchable.includes(term));
   }
@@ -1764,6 +1826,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     const head = element("header", "person-card-head");
     const identity = element("div", "person-card-identity");
     identity.append(element("h3", "person-name", person.name));
+    if (person.teamName) identity.append(element("span", "role-tag", person.teamName));
     if (combinedName(person.name) || !person.hasAssignment) {
       identity.append(element("span", "role-tag", combinedName(person.name) ? "源表合写" : "休息记录"));
     }
@@ -1938,10 +2001,10 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     return covered / 60000;
   }
 
-  function hostHours(bounds) {
+  function hostHours(bounds, source) {
     const people = new Map();
     const keysByName = new Map();
-    for (const person of schedule.directory.values()) {
+    for (const person of source.directory.values()) {
       if (combinedName(person.name)) continue;
       for (const name of person.aliases) {
         if (!keysByName.has(name)) keysByName.set(name, new Set());
@@ -1951,12 +2014,12 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
 
     function register(key, name) {
       if (!people.has(key)) {
-        people.set(key, { name: schedule.directory.get(key)?.name || name, shifts: [] });
+        people.set(key, { name: source.directory.get(key)?.name || name, shifts: [] });
       }
       return people.get(key);
     }
 
-    for (const shifts of schedule.byRoom.values()) {
+    for (const shifts of source.byRoom.values()) {
       for (const shift of shifts) {
         if (!monthHasDate(bounds, shift.sourceDate)) continue;
         const names = new Set(shift.host.split(/[/／、]/).map((name) => name.trim()).filter(Boolean));
@@ -1968,15 +2031,15 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
         }
       }
     }
-    for (const [date, resting] of schedule.restByDay) {
+    for (const [date, resting] of source.restByDay) {
       if (!monthHasDate(bounds, date)) continue;
-      for (const key of resting) register(key, schedule.directory.get(key).name);
+      for (const key of resting) register(key, source.directory.get(key).name);
     }
     return [...people.values()].map((person) => ({ name: person.name, minutes: unionMinutes(person.shifts) }));
   }
 
-  function assistantHours(bounds) {
-    return [...schedule.assistants.people.values()].flatMap((person) => {
+  function assistantHours(bounds, source) {
+    return [...source.assistants.people.values()].flatMap((person) => {
       const shifts = person.shifts.filter((shift) => monthHasDate(bounds, shift.sourceDate));
       const minutes = unionMinutes(shifts);
       const rest = [...person.restDays].some((date) => monthHasDate(bounds, date));
@@ -2027,41 +2090,68 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     if (hoursRendered) return;
     hoursRendered = true;
     const list = byId("hoursList");
-    const bounds = monthWindow(schedule.hoursMonth);
-    if (dataError || !bounds) {
-      list.append(dataError
-        ? emptyState("排班数据待核对", dataError)
-        : emptyState("工时统计月份待确认", "确认统计月份后可查看各人员的累计排班工时。"));
+    if (dataError) {
+      list.append(emptyState("排班数据待核对", dataError));
       return;
     }
-    byId("hoursPeriod").textContent =
-      `${bounds.year} 年 ${bounds.monthNumber} 月 1 日–${bounds.lastDay} 日 · 按源表日期列`;
-    byId("hoursNote").textContent =
-      "月末夜班完整计入。同格多名主播各计完整时长，同一人同角色的重叠时段只计一次。";
-
-    const teams = new Map();
-    function teamFor(name) {
-      const label = name || "未分组";
-      if (!teams.has(label)) teams.set(label, { hosts: [], assistants: [] });
-      return teams.get(label);
+    const sources = schedule.sources || [{ id: selectedTeam?.id, name: selectedTeam?.name, schedule }];
+    if (!sources.length) {
+      list.append(emptyState("暂无已导入团队的工时", "团队导入排班后可查看各人员的累计排班工时。"));
+      return;
     }
+    const multiple = sources.length > 1;
+    const period = byId("hoursPeriod");
+    const policy = "月末夜班完整计入。同格多名主播各计完整时长，同一人同角色的重叠时段只计一次。";
+    if (multiple) period.textContent = "各团队分别按源表日期列统计";
+    byId("hoursNote").textContent = multiple ? "各团队分别统计。" + policy : policy;
 
-    const hosts = hostHours(bounds);
-    if (hosts.length) teamFor(schedule.hostHoursTeam || selectedTeam.name).hosts = hosts;
-    for (const person of assistantHours(bounds)) teamFor(person.team).assistants.push(person);
-
-    for (const [team, roles] of teams) {
-      const section = element("section", "hours-team");
-      const grid = element("div", "hours-role-grid");
-      for (const [role, people] of Object.entries(roles)) {
-        if (people.length) grid.append(hoursRoleSection(team, role, people));
+    for (const { id, name, schedule: source } of sources) {
+      const bounds = monthWindow(source.hoursMonth);
+      const scope = multiple ? element("section", "hours-scope") : list;
+      if (multiple) {
+        scope.dataset.team = id;
+        const heading = element("header", "hours-scope-head");
+        heading.append(element("h3", "hours-scope-title", name));
+        if (bounds) {
+          heading.append(element("p", "hours-scope-period",
+            `${bounds.year} 年 ${bounds.monthNumber} 月 1 日–${bounds.lastDay} 日`));
+        }
+        scope.append(heading);
+        list.append(scope);
       }
-      section.append(element("h3", "hours-team-title", team), grid);
-      list.append(section);
-    }
+      if (!bounds) {
+        if (!multiple) byId("hoursNote").textContent = "";
+        scope.append(emptyState("工时统计月份待确认", "确认统计月份后可查看各人员的累计排班工时。"));
+        continue;
+      }
+      if (!multiple) {
+        period.textContent = `${bounds.year} 年 ${bounds.monthNumber} 月 1 日–${bounds.lastDay} 日 · 按源表日期列`;
+      }
 
-    if (schedule.assistants.error) list.append(emptyState("助播工时待核对", schedule.assistants.error));
-    else if (!teams.size) list.append(emptyState("本月暂无排班工时", "请确认本月的主播或助播排班。"));
+      const teams = new Map();
+      function teamFor(teamName) {
+        const label = teamName || "未分组";
+        if (!teams.has(label)) teams.set(label, { hosts: [], assistants: [] });
+        return teams.get(label);
+      }
+
+      const hosts = hostHours(bounds, source);
+      if (hosts.length) teamFor(source.hostHoursTeam || name).hosts = hosts;
+      for (const person of assistantHours(bounds, source)) teamFor(person.team).assistants.push(person);
+
+      for (const [team, roles] of teams) {
+        const section = element("section", "hours-team");
+        const grid = element("div", "hours-role-grid");
+        for (const [role, people] of Object.entries(roles)) {
+          if (people.length) grid.append(hoursRoleSection(team, role, people));
+        }
+        section.append(element("h3", "hours-team-title", team), grid);
+        scope.append(section);
+      }
+
+      if (source.assistants.error) scope.append(emptyState("助播工时待核对", source.assistants.error));
+      else if (!teams.size) scope.append(emptyState("本月暂无排班工时", "请确认本月的主播或助播排班。"));
+    }
   }
 
   function shiftNode(shift, next) {
@@ -2108,7 +2198,8 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
     const title = element("span", "handoff-identity");
     title.append(element("span", "room-id", room.displayNumber));
     if (room.name && room.name !== room.displayNumber) title.append(element("span", "room-heading", room.name));
-    if (room.platform) title.append(element("span", "room-meta", room.platform));
+    const meta = [room.teamName, room.platform].filter(Boolean).join(" · ");
+    if (meta) title.append(element("span", "room-meta", meta));
     header.append(title, element("span", "detail-link", "房间详情"));
     article.append(header, shiftTrack(room, showNext ? [room.current, room.next] : room.shifts));
     return article;
@@ -2144,7 +2235,8 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
 
   function updateRoomDialog(room) {
     byId("detailTitle").textContent = [room.displayNumber, room.name !== room.displayNumber ? room.name : ""].filter(Boolean).join(" ");
-    byId("detailMeta").textContent = [dayLabel(selectedDay, true), floorLabel(room.floor), room.platform, "查看时点 " + clock(asOfMinutes)]
+    byId("detailMeta").textContent = [dayLabel(selectedDay, true), floorLabel(room.floor), room.teamName, room.platform,
+      "查看时点 " + clock(asOfMinutes)]
       .filter(Boolean).join(" · ");
     byId("detailContent").replaceChildren(room.shifts.length
       ? shiftTrack(room, room.shifts)
@@ -2273,7 +2365,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   }
 
   function switchTeam() {
-    const next = teams.find((team) => team.id === teamSelect.value);
+    const next = teamSelect.value === allTeams.id ? allTeams : teams.find((team) => team.id === teamSelect.value);
     if (!next || next === selectedTeam) return;
     window.clearTimeout(timer);
     selectedTeam = next;
@@ -2297,6 +2389,12 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   }
 
   function describeSource() {
+    teamCoverage.hidden = selectedTeam !== allTeams || Boolean(dataError);
+    if (!teamCoverage.hidden) {
+      const loaded = schedule.sources.length;
+      const pending = teams.length - loaded;
+      teamCoverage.textContent = `${loaded} 个团队已导入` + (pending ? ` · ${pending} 个待导入` : "");
+    }
     const badge = byId("sourceBadge");
     if (badge) {
       badge.dataset.source = isPendingTeam() ? "pending" : dataError ? "error" : schedule.mode;
@@ -2391,6 +2489,8 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   teamSelect.replaceChildren(...teams.map((team) =>
     new Option(team.pending ? team.name + "（待导入）" : team.name, team.id),
   ));
+  if (teams.length > 1) teamSelect.add(new Option(allTeams.name, allTeams.id), 0);
+  teamSelect.value = selectedTeam?.id || "";
   teamSelect.disabled = teams.length < 2;
   setFloorOptions();
   describeSource();
