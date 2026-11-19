@@ -1013,7 +1013,7 @@ button.room-label:hover .room-title { color: var(--teal); text-decoration: under
   let dataError;
   try {
     teams = readTeams(JSON.parse(byId("scheduleData")?.textContent));
-    selectedTeam = teams[0];
+    selectedTeam = teams.length > 1 && teams.some((team) => !team.pending) ? allTeams : teams[0];
     loadTeamSchedule();
   } catch (error) {
     dataError = error instanceof ScheduleError ? error.message : "排班数据格式有误";
